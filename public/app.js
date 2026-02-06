@@ -69,6 +69,23 @@ function setupEventListeners() {
         if (e.target === loginModal) closeLoginModal();
     });
 
+    // Change Password
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    const changePasswordModal = document.getElementById('changePasswordModal');
+
+    if (changePasswordBtn) changePasswordBtn.addEventListener('click', () => {
+        document.getElementById('changePasswordModal').classList.add('active');
+        document.getElementById('currentPassword').focus();
+    });
+
+    document.getElementById('closeChangePasswordModal').addEventListener('click', closeChangePasswordModal);
+    document.getElementById('cancelChangePasswordBtn').addEventListener('click', closeChangePasswordModal);
+    document.getElementById('changePasswordForm').addEventListener('submit', handleChangePassword);
+
+    changePasswordModal.addEventListener('click', (e) => {
+        if (e.target === changePasswordModal) closeChangePasswordModal();
+    });
+
     // Search
     searchInput.addEventListener('input', handleSearch);
 
@@ -81,6 +98,7 @@ function setupEventListeners() {
         if (e.key === 'Escape') {
             closeModal();
             closeLoginModal();
+            closeChangePasswordModal();
         }
     });
 
@@ -103,6 +121,64 @@ function closeLoginModal() {
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('loginForm').reset();
     document.getElementById('loginError').style.display = 'none';
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').classList.remove('active');
+    document.getElementById('changePasswordForm').reset();
+    document.getElementById('changePasswordError').style.display = 'none';
+}
+
+async function handleChangePassword(e) {
+    e.preventDefault();
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+    const errorEl = document.getElementById('changePasswordError');
+    const submitBtn = document.getElementById('submitChangePasswordBtn');
+
+    if (newPassword !== confirmNewPassword) {
+        errorEl.textContent = 'New passwords do not match';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        errorEl.textContent = 'Password must be at least 6 characters long';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // UI Loading state
+    submitBtn.classList.add('loading');
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser ? currentUser.token : ''
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            closeChangePasswordModal();
+            showToast('Password updated successfully', 'success');
+        } else {
+            errorEl.textContent = data.error || 'Update failed';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Password change error:', error);
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
 }
 
 async function handleLogin(e) {
@@ -157,6 +233,7 @@ function updateUIForRole() {
     const addFirstProfileBtn = document.getElementById('addFirstProfileBtn');
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
     const adminBadge = document.getElementById('adminBadge');
 
     // Toggle Add Buttons
@@ -166,6 +243,7 @@ function updateUIForRole() {
     // Toggle Login/Logout
     if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'flex';
     if (logoutBtn) logoutBtn.style.display = isAdmin ? 'flex' : 'none';
+    if (changePasswordBtn) changePasswordBtn.style.display = isAdmin ? 'flex' : 'none';
     if (adminBadge) adminBadge.style.display = isAdmin ? 'flex' : 'none';
 
     // Re-render profiles to update card actions

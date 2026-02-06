@@ -147,6 +147,51 @@ app.post('/api/admin/setup', async (req, res) => {
     }
 });
 
+// Change Password
+app.post('/api/change-password', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        if (!token || !sessions.has(token)) {
+            return res.status(403).json({ success: false, error: 'Access denied. Invalid session.' });
+        }
+
+        const session = sessions.get(token);
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, error: 'Both current and new passwords are required' });
+        }
+
+        const collection = await getProfilesCollection();
+        const profile = await collection.findOne({ _id: new ObjectId(session.userId) });
+
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        // Verify current password
+        if (profile.password && profile.password !== hashPassword(currentPassword)) {
+            return res.status(401).json({ success: false, error: 'Incorrect current password' });
+        }
+
+        // Update to new password
+        await collection.updateOne(
+            { _id: profile._id },
+            {
+                $set: {
+                    password: hashPassword(newPassword),
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        res.json({ success: true, message: 'Password updated successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get all profiles
 app.get('/api/profiles', async (req, res) => {
     try {
