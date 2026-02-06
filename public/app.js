@@ -29,17 +29,46 @@ const toastContainer = document.getElementById('toastContainer');
 // State
 let profiles = [];
 let searchDebounceTimer = null;
+let currentUser = null; // Stores { token, user }
 
 // ========================================
 // Initialization
 // ========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Check for stored session
+    const storedSession = localStorage.getItem('adminSession');
+    if (storedSession) {
+        currentUser = JSON.parse(storedSession);
+    }
+
     loadProfiles();
     setupEventListeners();
+    updateUIForRole(); // Ensure UI is updated based on current state (null or user)
 });
 
 function setupEventListeners() {
+    // Login/Logout Buttons
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginModal = document.getElementById('loginModal');
+
+    if (loginBtn) loginBtn.addEventListener('click', () => {
+        document.getElementById('loginModal').classList.add('active');
+        document.getElementById('loginEmail').focus();
+    });
+
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    // Login Modal Controls
+    document.getElementById('closeLoginModal').addEventListener('click', closeLoginModal);
+    document.getElementById('cancelLoginBtn').addEventListener('click', closeLoginModal);
+    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+    loginModal.addEventListener('click', (e) => {
+        if (e.target === loginModal) closeLoginModal();
+    });
+
     // Search
     searchInput.addEventListener('input', handleSearch);
 
@@ -51,6 +80,7 @@ function setupEventListeners() {
         }
         if (e.key === 'Escape') {
             closeModal();
+            closeLoginModal();
         }
     });
 
@@ -67,6 +97,79 @@ function setupEventListeners() {
 
     // Form Submit
     profileForm.addEventListener('submit', handleFormSubmit);
+}
+
+function closeLoginModal() {
+    document.getElementById('loginModal').classList.remove('active');
+    document.getElementById('loginForm').reset();
+    document.getElementById('loginError').style.display = 'none';
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('loginError');
+    const submitBtn = document.getElementById('submitLoginBtn');
+
+    // UI Loading state
+    submitBtn.classList.add('loading');
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            currentUser = { token: data.token, user: data.user };
+            localStorage.setItem('adminSession', JSON.stringify(currentUser));
+            closeLoginModal();
+            updateUIForRole();
+            showToast('Logged in successfully', 'success');
+        } else {
+            errorEl.textContent = data.error || 'Login failed';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
+}
+
+function handleLogout() {
+    currentUser = null;
+    localStorage.removeItem('adminSession');
+    updateUIForRole();
+    showToast('Logged out', 'info');
+}
+
+function updateUIForRole() {
+    const isAdmin = currentUser && currentUser.user.role === 'admin';
+    const addProfileBtn = document.getElementById('addProfileBtn');
+    const addFirstProfileBtn = document.getElementById('addFirstProfileBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const adminBadge = document.getElementById('adminBadge');
+
+    // Toggle Add Buttons
+    if (addProfileBtn) addProfileBtn.style.display = isAdmin ? 'flex' : 'none';
+    if (addFirstProfileBtn) addFirstProfileBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+
+    // Toggle Login/Logout
+    if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'flex';
+    if (logoutBtn) logoutBtn.style.display = isAdmin ? 'flex' : 'none';
+    if (adminBadge) adminBadge.style.display = isAdmin ? 'flex' : 'none';
+
+    // Re-render profiles to update card actions
+    renderProfiles();
 }
 
 // ========================================
@@ -99,9 +202,14 @@ async function loadProfiles(query = '') {
 }
 
 async function createProfile(profileData) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentUser) {
+        headers['x-auth-token'] = currentUser.token;
+    }
+
     const response = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(profileData)
     });
 
@@ -109,9 +217,14 @@ async function createProfile(profileData) {
 }
 
 async function updateProfile(id, profileData) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentUser) {
+        headers['x-auth-token'] = currentUser.token;
+    }
+
     const response = await fetch(`${API_URL}/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(profileData)
     });
 
@@ -119,8 +232,14 @@ async function updateProfile(id, profileData) {
 }
 
 async function deleteProfile(id) {
+    const headers = {};
+    if (currentUser) {
+        headers['x-auth-token'] = currentUser.token;
+    }
+
     const response = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
     });
 
     return response.json();
@@ -172,7 +291,7 @@ function createProfileCard(profile) {
         <div class="profile-card" data-id="${profile._id}">
             <div class="profile-header">
                 <div class="profile-avatar">${initials}</div>
-                <div class="profile-actions">
+                <div class="profile-actions" style="opacity: ${currentUser && currentUser.user.role === 'admin' ? '1' : '0'}; pointer-events: ${currentUser && currentUser.user.role === 'admin' ? 'auto' : 'none'}; display: ${currentUser && currentUser.user.role === 'admin' ? 'flex' : 'none'}">
                     <button class="btn btn-secondary btn-icon btn-edit" data-id="${profile._id}" title="Edit Profile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -199,6 +318,7 @@ function createProfileCard(profile) {
             ${bioHtml}
             <div class="profile-meta">
                 <span>Created ${createdAt}</span>
+                <a href="/profile.html?id=${profile._id}" class="view-profile-link" style="margin-left: auto; color: var(--color-accent-primary); text-decoration: none; font-weight: 500;">View Portfolio →</a>
             </div>
         </div>
     `;
@@ -299,25 +419,65 @@ function handleSearch(e) {
 // Delete Function
 // ========================================
 
-async function handleDelete(id) {
-    if (!confirm('Are you sure you want to delete this profile?')) {
-        return;
-    }
+// ========================================
+// Delete Function
+// ========================================
+
+const deleteModal = document.getElementById('deleteModal');
+const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+const closeDeleteModalBtn = document.getElementById('closeDeleteModal');
+let profileIdToDelete = null;
+
+function setupDeleteModalListeners() {
+    closeDeleteModalBtn.addEventListener('click', closeDeleteModal);
+    cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+    deleteModal.addEventListener('click', (e) => {
+        if (e.target === deleteModal) closeDeleteModal();
+    });
+    confirmDeleteBtn.addEventListener('click', executeDelete);
+}
+
+function openDeleteModal(id) {
+    profileIdToDelete = id;
+    deleteModal.classList.add('active');
+}
+
+function closeDeleteModal() {
+    deleteModal.classList.remove('active');
+    profileIdToDelete = null;
+    confirmDeleteBtn.classList.remove('loading');
+}
+
+function handleDelete(id) {
+    openDeleteModal(id);
+}
+
+async function executeDelete() {
+    if (!profileIdToDelete) return;
+
+    confirmDeleteBtn.classList.add('loading');
 
     try {
-        const result = await deleteProfile(id);
+        const result = await deleteProfile(profileIdToDelete);
 
         if (result.success) {
             showToast('Profile deleted successfully!', 'success');
             loadProfiles(searchInput.value);
+            closeDeleteModal();
         } else {
             showToast(result.error || 'Failed to delete profile', 'error');
+            confirmDeleteBtn.classList.remove('loading');
         }
     } catch (error) {
         console.error('Error deleting profile:', error);
         showToast('Connection error. Please try again.', 'error');
+        confirmDeleteBtn.classList.remove('loading');
     }
 }
+
+// Initialize delete listeners
+document.addEventListener('DOMContentLoaded', setupDeleteModalListeners);
 
 // ========================================
 // Toast Notifications
@@ -380,3 +540,181 @@ function formatDate(dateString) {
         year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
     });
 }
+
+// ========================================
+// AI Chat Widget
+// ========================================
+
+const chatWidget = document.getElementById('chatWidget');
+const chatToggle = document.getElementById('chatToggle');
+const chatPanel = document.getElementById('chatPanel');
+const chatMessages = document.getElementById('chatMessages');
+const chatForm = document.getElementById('chatForm');
+const chatInput = document.getElementById('chatInput');
+const chatSend = document.getElementById('chatSend');
+
+let isChatOpen = false;
+let isProcessing = false;
+
+// Initialize chat
+function initChat() {
+    if (!chatToggle) return;
+
+    chatToggle.addEventListener('click', toggleChat);
+    chatForm.addEventListener('submit', handleChatSubmit);
+
+    // Close chat on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isChatOpen) {
+            toggleChat();
+        }
+    });
+}
+
+// Toggle chat panel
+function toggleChat() {
+    isChatOpen = !isChatOpen;
+    chatWidget.classList.toggle('active', isChatOpen);
+
+    if (isChatOpen) {
+        chatInput.focus();
+    }
+}
+
+// Handle chat form submit
+async function handleChatSubmit(e) {
+    e.preventDefault();
+
+    const message = chatInput.value.trim();
+    if (!message || isProcessing) return;
+
+    // Add user message
+    addChatMessage(message, 'user');
+    chatInput.value = '';
+
+    // Show typing indicator
+    isProcessing = true;
+    chatSend.disabled = true;
+    const typingEl = showTypingIndicator();
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        typingEl.remove();
+
+        if (data.success) {
+            // Add AI response
+            addChatMessage(data.response, 'ai', data.action);
+
+            // Refresh profiles if data changed
+            if (data.action && ['created', 'updated', 'search', 'list'].includes(data.action.type)) {
+                loadProfiles(searchInput.value);
+            }
+        } else {
+            addChatMessage(data.response || data.error || 'Sorry, I encountered an error.', 'ai');
+        }
+    } catch (error) {
+        console.error('Chat error:', error);
+        typingEl.remove();
+        addChatMessage('Sorry, I encountered a connection error. Please try again.', 'ai');
+    } finally {
+        isProcessing = false;
+        chatSend.disabled = false;
+        chatInput.focus();
+    }
+}
+
+// Add message to chat
+function addChatMessage(content, type, action = null) {
+    const messageEl = document.createElement('div');
+    messageEl.className = `chat-message ${type}`;
+
+    let html = `<div class="message-content"><p>${escapeHtml(content)}</p>`;
+
+    // Add action-specific content
+    if (action) {
+        switch (action.type) {
+            case 'created':
+                html += `<div class="message-profiles">`;
+                html += `<div class="message-profile-card">`;
+                html += `<strong>${escapeHtml(action.profile.name)}</strong>`;
+                if (action.profile.role) html += ` - ${escapeHtml(action.profile.role)}`;
+                html += `<br>${escapeHtml(action.profile.email)}`;
+                html += `</div></div>`;
+                break;
+
+            case 'updated':
+                html += `<div class="message-profiles">`;
+                html += `<div class="message-profile-card">`;
+                html += `<strong>${escapeHtml(action.profile.name)}</strong>`;
+                if (action.profile.role) html += ` - ${escapeHtml(action.profile.role)}`;
+                html += `<br>${escapeHtml(action.profile.email)}`;
+                html += `</div></div>`;
+                break;
+
+            case 'search':
+            case 'list':
+                if (action.profiles && action.profiles.length > 0) {
+                    html += `<div class="message-profiles">`;
+                    action.profiles.slice(0, 5).forEach(profile => {
+                        html += `<div class="message-profile-card">`;
+                        html += `<strong>${escapeHtml(profile.name)}</strong>`;
+                        if (profile.role) html += ` - ${escapeHtml(profile.role)}`;
+                        html += `<br>${escapeHtml(profile.email)}`;
+                        html += `</div>`;
+                    });
+                    if (action.profiles.length > 5) {
+                        html += `<p style="font-size: 0.75rem; color: var(--color-text-muted);">...and ${action.profiles.length - 5} more</p>`;
+                    }
+                    html += `</div>`;
+                }
+                break;
+
+            case 'not_found':
+            case 'error':
+                // Error message already in content
+                break;
+
+            case 'help':
+                // Help content handled by AI response
+                break;
+        }
+    }
+
+    html += `</div>`;
+    messageEl.innerHTML = html;
+
+    chatMessages.appendChild(messageEl);
+    scrollChatToBottom();
+}
+
+// Show typing indicator
+function showTypingIndicator() {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'chat-message ai';
+    messageEl.innerHTML = `
+        <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    `;
+    chatMessages.appendChild(messageEl);
+    scrollChatToBottom();
+    return messageEl;
+}
+
+// Scroll chat to bottom
+function scrollChatToBottom() {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Initialize chat on DOM ready
+document.addEventListener('DOMContentLoaded', initChat);

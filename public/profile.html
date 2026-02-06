@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Details | Profile Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .portfolio-header {
+            background: var(--color-bg-card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-2xl);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-2xl);
+            backdrop-filter: blur(10px);
+        }
+
+        .portfolio-avatar {
+            width: 100px;
+            height: 100px;
+            background: var(--color-accent-gradient);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .portfolio-info {
+            flex: 1;
+        }
+
+        .portfolio-info h1 {
+            font-size: 2rem;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .portfolio-role {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--color-accent-primary);
+            border-radius: var(--radius-full);
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .portfolio-contact {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--color-text-secondary);
+        }
+
+        .portfolio-contact svg {
+            width: 18px;
+            height: 18px;
+            color: var(--color-text-muted);
+        }
+
+        .content-section {
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .content-section h2 {
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-lg);
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: var(--spacing-sm);
+        }
+
+        .bio-text {
+            color: var(--color-text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.8;
+            background: var(--color-bg-secondary);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--color-border);
+        }
+
+        .portfolio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-lg);
+        }
+
+        .portfolio-item {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            transition: all var(--transition-base);
+        }
+
+        .portfolio-item:hover {
+            transform: translateY(-4px);
+            border-color: var(--color-accent-primary);
+        }
+
+        .portfolio-item-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--color-bg-tertiary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--spacing-md);
+            color: var(--color-accent-primary);
+        }
+
+        .portfolio-item-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .portfolio-item h3 {
+            font-size: 1.1rem;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .portfolio-item p {
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .error-state {
+            text-align: center;
+            padding: var(--spacing-2xl);
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M20 21a8 8 0 1 0-16 0" />
+                    </svg>
+                </div>
+                <h1>Profile Manager</h1>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div id="loadingState" class="loading-state active">
+            <div class="spinner"></div>
+            <p>Loading profile details...</p>
+        </div>
+
+        <div id="errorState" class="error-state">
+            <h3>Something went wrong</h3>
+            <p></p>
+            <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Dashboard</a>
+        </div>
+
+        <div id="profileContent">
+            <!-- Content injected by JS -->
+        </div>
+    </main>
+
+    <script src="profile_app.js"></script>
+</body>
+
+</html>
