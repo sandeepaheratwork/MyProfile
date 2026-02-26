@@ -1,20 +1,20 @@
-# Use Node.js LTS (Long Term Support) version
 FROM node:20-alpine
 
-# Set working directory
+# Create app directory
 WORKDIR /app
 
-# Copy package files first to leverage Docker cache
+# Copy package files first (better Docker layer caching)
 COPY package*.json ./
 
-# Install dependencies (production only)
-RUN npm install --production
+# Install only production dependencies
+RUN npm install --omit=dev
 
-# Copy the rest of the application code
+# Copy the rest of the source code
 COPY . .
 
-# Expose the port the app runs on
+# Cloud Run injects PORT env var — default to 3001 locally
+ENV PORT=3001
 EXPOSE 3001
 
-# Start the application
-CMD ["npm", "start"]
+# Start the server
+CMD ["node", "server.js"]
