@@ -42,13 +42,16 @@ async function loadProfile(id) {
 
 function renderProfile(profile) {
     const initials = getInitials(profile.name);
+    const avatarHtml = profile.imageUrl
+        ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+        : initials;
 
     // Update document title
     document.title = `${profile.name} - Portfolio | Profile Manager`;
 
     const html = `
         <div class="portfolio-header">
-            <div class="portfolio-avatar">${initials}</div>
+            <div class="portfolio-avatar">${avatarHtml}</div>
             <div class="portfolio-info">
                 <h1>${escapeHtml(profile.name)}</h1>
                 ${profile.role ? `<div class="portfolio-role">${escapeHtml(profile.role)}</div>` : ''}

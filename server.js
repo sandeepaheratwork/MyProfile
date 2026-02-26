@@ -28,7 +28,7 @@ if (GEMINI_API_KEY) {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Simple session store
@@ -254,7 +254,7 @@ app.get('/api/profiles/search', async (req, res) => {
 // Create profile
 app.post('/api/profiles', checkAdminRole, async (req, res) => {
     try {
-        const { name, email, role, bio } = req.body;
+        const { name, email, role, bio, imageUrl } = req.body;
 
         if (!name || !email) {
             return res.status(400).json({
@@ -270,6 +270,7 @@ app.post('/api/profiles', checkAdminRole, async (req, res) => {
             email,
             role: role || undefined,
             bio: bio || undefined,
+            imageUrl: imageUrl || undefined,
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -290,13 +291,14 @@ app.post('/api/profiles', checkAdminRole, async (req, res) => {
 app.put('/api/profiles/:id', checkAdminRole, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, role, bio } = req.body;
+        const { name, email, role, bio, imageUrl } = req.body;
 
         const updates = {};
         if (name !== undefined) updates.name = name;
         if (email !== undefined) updates.email = email;
         if (role !== undefined) updates.role = role;
         if (bio !== undefined) updates.bio = bio;
+        if (imageUrl !== undefined) updates.imageUrl = imageUrl;
         updates.updatedAt = new Date();
 
         if (Object.keys(updates).length === 1) {

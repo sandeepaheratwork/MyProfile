@@ -23,6 +23,12 @@ const roleInput = document.getElementById('roleInput');
 const bioInput = document.getElementById('bioInput');
 const submitBtn = document.getElementById('submitBtn');
 
+// Image Elements
+const imageInput = document.getElementById('imageInput');
+const selectImageBtn = document.getElementById('selectImageBtn');
+const imagePreview = document.getElementById('imagePreview');
+const imageUrlInput = document.getElementById('imageUrlInput');
+
 // Toast Container
 const toastContainer = document.getElementById('toastContainer');
 
@@ -115,6 +121,15 @@ function setupEventListeners() {
 
     // Form Submit
     profileForm.addEventListener('submit', handleFormSubmit);
+
+    // Image Upload
+    if (selectImageBtn) {
+        selectImageBtn.addEventListener('click', () => imageInput.click());
+    }
+
+    if (imageInput) {
+        imageInput.addEventListener('change', handleImageUpload);
+    }
 }
 
 function closeLoginModal() {
@@ -356,6 +371,10 @@ function renderProfiles() {
 
 function createProfileCard(profile) {
     const initials = getInitials(profile.name);
+    const avatarHtml = profile.imageUrl
+        ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+        : initials;
+
     const roleHtml = profile.role
         ? `<span class="profile-role">${escapeHtml(profile.role)}</span>`
         : '';
@@ -368,7 +387,7 @@ function createProfileCard(profile) {
     return `
         <div class="profile-card" data-id="${profile._id}">
             <div class="profile-header">
-                <div class="profile-avatar">${initials}</div>
+                <div class="profile-avatar">${avatarHtml}</div>
                 <div class="profile-actions" style="opacity: ${currentUser && currentUser.user.role === 'admin' ? '1' : '0'}; pointer-events: ${currentUser && currentUser.user.role === 'admin' ? 'auto' : 'none'}; display: ${currentUser && currentUser.user.role === 'admin' ? 'flex' : 'none'}">
                     <button class="btn btn-secondary btn-icon btn-edit" data-id="${profile._id}" title="Edit Profile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -425,6 +444,14 @@ function openModal(profile = null) {
         emailInput.value = profile.email;
         roleInput.value = profile.role || '';
         bioInput.value = profile.bio || '';
+
+        // Handle Image Preview
+        if (profile.imageUrl) {
+            imagePreview.innerHTML = `<img src="${profile.imageUrl}" alt="Preview">`;
+            imageUrlInput.value = profile.imageUrl;
+        } else {
+            resetImagePreview();
+        }
     } else {
         // Create mode
         modalTitle.textContent = 'Create Profile';
@@ -432,6 +459,7 @@ function openModal(profile = null) {
 
         profileForm.reset();
         profileIdInput.value = '';
+        resetImagePreview();
     }
 
     profileModal.classList.add('active');
@@ -441,7 +469,40 @@ function openModal(profile = null) {
 function closeModal() {
     profileModal.classList.remove('active');
     profileForm.reset();
+    resetImagePreview();
     submitBtn.classList.remove('loading');
+}
+
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('Image too large. Max size is 2MB.', 'error');
+        imageInput.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const base64String = event.target.result;
+        imageUrlInput.value = base64String;
+        imagePreview.innerHTML = `<img src="${base64String}" alt="Preview">`;
+    };
+    reader.readAsDataURL(file);
+}
+
+function resetImagePreview() {
+    imagePreview.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+        </svg>
+    `;
+    if (imageUrlInput) imageUrlInput.value = '';
+    if (imageInput) imageInput.value = '';
 }
 
 async function handleFormSubmit(e) {
@@ -451,7 +512,8 @@ async function handleFormSubmit(e) {
         name: nameInput.value.trim(),
         email: emailInput.value.trim(),
         role: roleInput.value.trim() || undefined,
-        bio: bioInput.value.trim() || undefined
+        bio: bioInput.value.trim() || undefined,
+        imageUrl: imageUrlInput.value || undefined
     };
 
     submitBtn.classList.add('loading');

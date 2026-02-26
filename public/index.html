@@ -226,6 +226,27 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Profile Picture</label>
+                    <div class="image-upload-wrapper">
+                        <div class="image-preview" id="imagePreview">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                        </div>
+                        <div class="image-upload-controls">
+                            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                            <button type="button" class="btn btn-secondary btn-sm" id="selectImageBtn">
+                                Choose Photo
+                            </button>
+                            <p class="form-hint">Max size: 2MB. Format: JPG, PNG</p>
+                        </div>
+                    </div>
+                    <input type="hidden" id="imageUrlInput">
+                </div>
+
+                <div class="form-group">
                     <label for="emailInput">Email Address</label>
                     <input type="email" id="emailInput" class="form-input" placeholder="Enter email address" required>
                 </div>
