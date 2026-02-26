@@ -41,6 +41,7 @@ async function connectToMongoDB() {
     if (db) return db;
 
     try {
+        console.log('Connecting to MongoDB...');
         const client = new MongoClient(MONGODB_URI);
         await client.connect();
         db = client.db(DB_NAME);
