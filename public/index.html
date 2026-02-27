@@ -86,10 +86,17 @@
                 </svg>
                 User Management
             </button>
+            <button class="nav-tab" data-tab="my-profile" id="userProfileTab" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21a8 8 0 1 0-16 0" />
+                    <circle cx="12" cy="7" r="4" />
+                </svg>
+                My Profile
+            </button>
         </div>
 
         <!-- Search Section -->
-        <section class="search-section" id="searchSection">
+        <section class="search-section" id="searchSection" style="display: none;">
             <div class="search-wrapper">
                 <div class="search-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -126,6 +133,20 @@
             </div>
             <div id="blogEmptyState" class="empty-state" style="display: none;">
                 <p>No technical blogs yet. Stay tuned!</p>
+            </div>
+        </section>
+
+        <!-- My Profile Section -->
+        <section class="my-profile-section" id="myProfileSection" style="display: none;">
+            <div class="section-header" style="margin-bottom: 2rem;">
+                <h2>My Professional Profile</h2>
+            </div>
+            <div id="myProfileContent" class="profile-detail-card">
+                <!-- User's own profile will be rendered here -->
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading your profile...</p>
+                </div>
             </div>
         </section>
 

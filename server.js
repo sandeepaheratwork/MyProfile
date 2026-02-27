@@ -453,6 +453,31 @@ app.get('/api/profiles', async (req, res) => {
     }
 });
 
+// Get current user's own profile
+app.get('/api/profiles/me', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = sessions.get(token);
+
+        if (!session) {
+            return res.status(401).json({ success: false, error: 'Not authenticated' });
+        }
+
+        const collection = await getProfilesCollection();
+        const profile = await collection.findOne({ _id: new ObjectId(session.userId) });
+
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+
+        // Remove sensitive fields
+        const { password, ...safeProfile } = profile;
+        res.json({ success: true, profile: safeProfile });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Search profiles
 app.get('/api/profiles/search', async (req, res) => {
     try {

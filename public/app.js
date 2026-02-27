@@ -180,17 +180,24 @@ function switchTab(tabId) {
     const blogsSection = document.getElementById('blogsSection');
     const profilesSection = document.getElementById('profilesSection');
     const searchSection = document.getElementById('searchSection');
+    const myProfileSection = document.getElementById('myProfileSection');
+
+    // Hide all
+    blogsSection.style.display = 'none';
+    profilesSection.style.display = 'none';
+    searchSection.style.display = 'none';
+    myProfileSection.style.display = 'none';
 
     if (tabId === 'blogs') {
         blogsSection.style.display = 'block';
-        profilesSection.style.display = 'none';
-        searchSection.style.display = 'none';
         loadBlogs();
-    } else {
-        blogsSection.style.display = 'none';
+    } else if (tabId === 'profiles') {
         profilesSection.style.display = 'block';
         searchSection.style.display = 'block';
         loadProfiles();
+    } else if (tabId === 'my-profile') {
+        myProfileSection.style.display = 'block';
+        loadMyProfile();
     }
 }
 
@@ -356,6 +363,7 @@ function updateUIForRole() {
     const addProfileBtn = document.getElementById('addProfileBtn');
     const mainNavTabs = document.getElementById('mainNavTabs');
     const adminProfilesTab = document.getElementById('adminProfilesTab');
+    const userProfileTab = document.getElementById('userProfileTab');
     const newBlogBtn = document.getElementById('newBlogBtn');
 
     if (currentUser) {
@@ -369,11 +377,13 @@ function updateUIForRole() {
             if (adminBadge) adminBadge.style.display = 'flex';
             if (addProfileBtn) addProfileBtn.style.display = 'flex';
             if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
+            if (userProfileTab) userProfileTab.style.display = 'none';
             if (newBlogBtn) newBlogBtn.style.display = 'block';
         } else {
             if (adminBadge) adminBadge.style.display = 'none';
             if (addProfileBtn) addProfileBtn.style.display = 'none';
             if (adminProfilesTab) adminProfilesTab.style.display = 'none';
+            if (userProfileTab) userProfileTab.style.display = 'flex';
             if (newBlogBtn) newBlogBtn.style.display = 'none';
         }
 
@@ -440,34 +450,70 @@ function renderBlogs(blogs) {
     `).join('');
 }
 
+async function loadMyProfile() {
+    const content = document.getElementById('myProfileContent');
+
+    try {
+        const response = await fetch('/api/profiles/me', {
+            headers: { 'x-auth-token': currentUser ? currentUser.token : '' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            renderMyProfile(data.profile);
+        } else {
+            content.innerHTML = `<p class="error">${data.error || 'Failed to load profile'}</p>`;
+        }
+    } catch (error) {
+        console.error('Error loading personal profile:', error);
+        content.innerHTML = `<p class="error">Connection error. Please try again.</p>`;
+    }
+}
+
+function renderMyProfile(profile) {
+    const content = document.getElementById('myProfileContent');
+
+    content.innerHTML = `
+        <div class="profile-card profile-detail-view" style="max-width: 600px; margin: 0 auto;">
+            <div class="profile-header">
+                <div class="profile-image-container">
+                    ${profile.imageUrl
+            ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}" class="profile-image">`
+            : `<div class="profile-initials large">${profile.name[0]}</div>`
+        }
+                </div>
+                <div class="profile-title">
+                    <h3>${escapeHtml(profile.name)}</h3>
+                    <p class="role">${escapeHtml(profile.role || 'Professional')}</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openModal(${JSON.stringify(profile).replace(/"/g, '&quot;')})">
+                    Edit Profile
+                </button>
+            </div>
+            <div class="profile-body">
+                <div class="info-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                        <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                    <span>${escapeHtml(profile.email)}</span>
+                </div>
+                ${profile.bio ? `
+                    <div class="profile-bio">
+                        <h4>About</h4>
+                        <p>${escapeHtml(profile.bio)}</p>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
 function handleLogout() {
     currentUser = null;
     localStorage.removeItem('adminSession');
     updateUIForRole();
     showToast('Logged out', 'info');
-}
-
-function updateUIForRole() {
-    const isAdmin = currentUser && currentUser.user.role === 'admin';
-    const addProfileBtn = document.getElementById('addProfileBtn');
-    const addFirstProfileBtn = document.getElementById('addFirstProfileBtn');
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const changePasswordBtn = document.getElementById('changePasswordBtn');
-    const adminBadge = document.getElementById('adminBadge');
-
-    // Toggle Add Buttons
-    if (addProfileBtn) addProfileBtn.style.display = isAdmin ? 'flex' : 'none';
-    if (addFirstProfileBtn) addFirstProfileBtn.style.display = isAdmin ? 'inline-flex' : 'none';
-
-    // Toggle Login/Logout
-    if (loginBtn) loginBtn.style.display = isAdmin ? 'none' : 'flex';
-    if (logoutBtn) logoutBtn.style.display = isAdmin ? 'flex' : 'none';
-    if (changePasswordBtn) changePasswordBtn.style.display = isAdmin ? 'flex' : 'none';
-    if (adminBadge) adminBadge.style.display = isAdmin ? 'flex' : 'none';
-
-    // Re-render profiles to update card actions
-    renderProfiles();
 }
 
 // ========================================
