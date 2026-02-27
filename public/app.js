@@ -152,6 +152,22 @@ function setupEventListeners() {
     if (imageInput) {
         imageInput.addEventListener('change', handleImageUpload);
     }
+
+    // Blog Buttons
+    const newBlogBtn = document.getElementById('newBlogBtn');
+    if (newBlogBtn) newBlogBtn.addEventListener('click', () => {
+        document.getElementById('blogModal').classList.add('active');
+        document.getElementById('blogTitleInput').focus();
+    });
+
+    document.getElementById('closeBlogModal').addEventListener('click', closeBlogModal);
+    document.getElementById('cancelBlogBtn').addEventListener('click', closeBlogModal);
+    document.getElementById('blogForm').addEventListener('submit', handleBlogSubmit);
+
+    const blogModal = document.getElementById('blogModal');
+    if (blogModal) blogModal.addEventListener('click', (e) => {
+        if (e.target === blogModal) closeBlogModal();
+    });
 }
 
 function closeLoginModal() {
@@ -428,6 +444,80 @@ async function loadBlogs() {
         console.error('Error loading blogs:', error);
     } finally {
         loadingState.style.display = 'none';
+    }
+}
+
+function closeBlogModal() {
+    document.getElementById('blogModal').classList.remove('active');
+    document.getElementById('blogForm').reset();
+    document.getElementById('submitBlogBtn').classList.remove('loading');
+}
+
+async function handleBlogSubmit(e) {
+    e.preventDefault();
+    const title = document.getElementById('blogTitleInput').value.trim();
+    const tags = document.getElementById('blogTagsInput').value.split(',').map(t => t.trim()).filter(t => t);
+    const content = document.getElementById('blogContentInput').value.trim();
+    const submitBtn = document.getElementById('submitBlogBtn');
+
+    submitBtn.classList.add('loading');
+
+    try {
+        const response = await fetch('/api/blogs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser ? currentUser.token : ''
+            },
+            body: JSON.stringify({ title, tags, content })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Blog post published!', 'success');
+            closeBlogModal();
+            loadBlogs();
+        } else {
+            showToast(data.error || 'Failed to publish blog', 'error');
+        }
+    } catch (error) {
+        console.error('Error publishing blog:', error);
+        showToast('Connection error. Please try again.', 'error');
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
+}
+
+async function showBlogDetail(id) {
+    try {
+        const response = await fetch(`/api/blogs/${id}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const blog = data.blog;
+            const detailHtml = `
+                <div class="blog-detail">
+                    <button class="btn btn-secondary btn-sm" style="margin-bottom: 1.5rem;" onclick="loadBlogs()">← Back to List</button>
+                    <h2>${escapeHtml(blog.title)}</h2>
+                    <div class="blog-meta">
+                        <span>By ${escapeHtml(blog.author.name)}</span> | 
+                        <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div class="blog-full-content" style="margin-top: 1.5rem; line-height: 1.6; white-space: pre-wrap; background: var(--color-bg-secondary); padding: 1.5rem; border-radius: 8px;">
+                        ${escapeHtml(blog.content)}
+                    </div>
+                    <div class="blog-tags" style="margin-top: 2rem;">
+                        ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+            document.getElementById('blogsGrid').innerHTML = detailHtml;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    } catch (error) {
+        console.error('Error loading blog detail:', error);
+        showToast('Failed to load blog details', 'error');
     }
 }
 

@@ -365,6 +365,49 @@
         </div>
     </div>
 
+    <!-- Create Blog Modal -->
+    <div class="modal-overlay" id="blogModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Create New Post</h2>
+                <button class="modal-close" id="closeBlogModal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <form id="blogForm" class="modal-form">
+                <div class="form-group">
+                    <label for="blogTitleInput">Title</label>
+                    <input type="text" id="blogTitleInput" class="form-input" placeholder="Enter post title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="blogTagsInput">Tags (comma-separated)</label>
+                    <input type="text" id="blogTagsInput" class="form-input"
+                        placeholder="e.g. JavaScript, Architecture, GCP">
+                </div>
+
+                <div class="form-group">
+                    <label for="blogContentInput">Content (Markdown supported)</label>
+                    <textarea id="blogContentInput" class="form-input form-textarea"
+                        placeholder="Write your technical insight..." rows="12" required></textarea>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBlogBtn">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBlogBtn">
+                        <span class="btn-text">Publish Post</span>
+                        <div class="btn-spinner"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Delete Confirmation Modal -->
     <div class="modal-overlay" id="deleteModal">
         <div class="modal">
