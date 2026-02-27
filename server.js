@@ -159,6 +159,13 @@ const mcpTransports = new Map();
 // MCP SSE Routes
 app.get('/mcp/sse', async (req, res) => {
     console.log('New MCP Cloud connection (SSE)');
+
+    // Cloud Run / Proxy settings to prevent buffering
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Connection', 'keep-alive');
+
     const transport = new SSEServerTransport('/mcp/messages', res);
     mcpTransports.set(transport.sessionId, transport);
 
@@ -170,15 +177,22 @@ app.get('/mcp/sse', async (req, res) => {
     await mcpServer.connect(transport);
 });
 
-app.post('/mcp/messages', async (req, res) => {
+// Use raw body for MCP messages as the SDK handles parsing
+app.post('/mcp/messages', bodyParser.text({ type: '*/*' }), async (req, res) => {
     const sessionId = req.query.sessionId;
     const transport = mcpTransports.get(sessionId);
 
     if (!transport) {
+        console.warn(`MCP session ${sessionId} not found for POST message`);
         return res.status(404).send('Session not found');
     }
 
-    await transport.handlePostMessage(req, res);
+    try {
+        await transport.handlePostMessage(req, res);
+    } catch (error) {
+        console.error(`Error handling MCP POST message: ${error.message}`);
+        res.status(500).send(error.message);
+    }
 });
 
 // Info route for the user
