@@ -57,7 +57,7 @@ app.get('/mcp/sse', async (req, res) => {
     await mcpServer.connect(transport);
 });
 
-app.post('/mcp/messages', async (req, res) => {
+app.post('/mcp/messages', express.json(), async (req, res) => {
     const sessionId = req.query.sessionId;
     const transport = mcpTransports.get(sessionId);
 
@@ -67,7 +67,7 @@ app.post('/mcp/messages', async (req, res) => {
     }
 
     try {
-        await transport.handlePostMessage(req, res);
+        await transport.handlePostMessage(req, res, req.body);
     } catch (error) {
         console.error(`Error handling MCP POST message: ${error.message}`);
         res.status(500).send(error.message);
