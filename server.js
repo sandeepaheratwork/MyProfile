@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
 const { z } = require('zod');
+const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const app = express();
