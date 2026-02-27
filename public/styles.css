@@ -964,6 +964,13 @@ body::before {
     border-bottom-left-radius: 4px;
 }
 
+.chat-message.ai-error .message-content {
+    background: #fef2f2;
+    border: 1px solid #fee2e2;
+    color: #991b1b;
+    border-bottom-left-radius: 4px;
+}
+
 .chat-message.user .message-content {
     background: var(--color-accent-gradient);
     color: white;

@@ -693,8 +693,11 @@ app.post('/api/chat', async (req, res) => {
         console.error('Chat error:', error);
 
         let errorMessage = 'I encountered an error processing your request. Please try again.';
+        let isRateLimited = false;
+
         if (error.message.includes('429') || error.message.includes('Quota exceeded')) {
-            errorMessage = 'I am currently receiving too many requests. Please wait a minute and try again.';
+            errorMessage = 'I am currently receiving too many requests. This is a provider limit (Gemini 2.0 Flash Free Tier). Please wait about 60 seconds and try again.';
+            isRateLimited = true;
         } else if (error.message.includes('503')) {
             errorMessage = 'The AI service is temporarily unavailable. Please try again later.';
         }
@@ -703,6 +706,7 @@ app.post('/api/chat', async (req, res) => {
             success: true,
             intent: 'unknown',
             response: errorMessage,
+            isRateLimited,
             action: null
         });
     }

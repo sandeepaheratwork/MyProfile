@@ -751,14 +751,19 @@ async function handleChatSubmit(e) {
 
         if (data.success) {
             // Add AI response
-            addChatMessage(data.response, 'ai', data.action);
+            if (data.isRateLimited) {
+                addChatMessage(data.response, 'ai-error');
+                showToast('Rate limit reached', 'error');
+            } else {
+                addChatMessage(data.response, 'ai', data.action);
+            }
 
             // Refresh profiles if data changed
             if (data.action && ['created', 'updated', 'search', 'list'].includes(data.action.type)) {
                 loadProfiles(searchInput.value);
             }
         } else {
-            addChatMessage(data.response || data.error || 'Sorry, I encountered an error.', 'ai');
+            addChatMessage(data.response || data.error || 'Sorry, I encountered an error.', 'ai-error');
         }
     } catch (error) {
         console.error('Chat error:', error);
