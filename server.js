@@ -4,6 +4,9 @@ const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+const { z } = require('zod');
 require('dotenv').config();
 
 const app = express();
@@ -78,6 +81,117 @@ const checkAdminRole = (req, res, next) => {
     }
     next();
 };
+
+// ==========================================
+// MCP Cloud Server Implementation
+// ==========================================
+
+const mcpServer = new McpServer({
+    name: "profile-manager-cloud",
+    version: "1.0.0",
+});
+
+// Tool: Search Profiles
+mcpServer.tool(
+    "search_profiles",
+    "Search for profiles by name, email, or role",
+    {
+        query: z.string().describe("Search query to find profiles")
+    },
+    async ({ query }) => {
+        try {
+            const collection = await getProfilesCollection();
+            const profiles = await collection.find({
+                $or: [
+                    { name: { $regex: query, $options: 'i' } },
+                    { email: { $regex: query, $options: 'i' } },
+                    { role: { $regex: query, $options: 'i' } }
+                ]
+            }).limit(10).toArray();
+
+            return {
+                content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error searching profiles: ${error.message}` }],
+                isError: true
+            };
+        }
+    }
+);
+
+// Tool: Create Profile (Admin Only tools usually, but exposed here for MCP)
+mcpServer.tool(
+    "create_profile",
+    "Create a new profile",
+    {
+        name: z.string(),
+        email: z.string().email(),
+        role: z.string().optional()
+    },
+    async ({ name, email, role }) => {
+        try {
+            const collection = await getProfilesCollection();
+            const result = await collection.insertOne({
+                name,
+                email,
+                role,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            return {
+                content: [{ type: "text", text: `Profile created with ID: ${result.insertedId}` }]
+            };
+        } catch (error) {
+            return {
+                content: [{ type: "text", text: `Error creating profile: ${error.message}` }],
+                isError: true
+            };
+        }
+    }
+);
+
+// MCP Transport Store
+const mcpTransports = new Map();
+
+// MCP SSE Routes
+app.get('/mcp/sse', async (req, res) => {
+    console.log('New MCP Cloud connection (SSE)');
+    const transport = new SSEServerTransport('/mcp/messages', res);
+    mcpTransports.set(transport.sessionId, transport);
+
+    res.on('close', () => {
+        mcpTransports.delete(transport.sessionId);
+        console.log(`MCP session ${transport.sessionId} closed`);
+    });
+
+    await mcpServer.connect(transport);
+});
+
+app.post('/mcp/messages', async (req, res) => {
+    const sessionId = req.query.sessionId;
+    const transport = mcpTransports.get(sessionId);
+
+    if (!transport) {
+        return res.status(404).send('Session not found');
+    }
+
+    await transport.handlePostMessage(req, res);
+});
+
+// Info route for the user
+app.get('/mcp', (req, res) => {
+    res.json({
+        name: "Profile Manager MCP Cloud",
+        status: "active",
+        endpoints: {
+            sse: "/mcp/sse",
+            messages: "/mcp/messages"
+        },
+        description: "Connect your MCP client to the SSE endpoint to manage profiles remotely."
+    });
+});
 
 // API Routes
 
