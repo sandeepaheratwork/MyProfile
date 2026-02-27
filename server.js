@@ -4,6 +4,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,7 +15,7 @@ const DB_NAME = 'mcp_profiles';
 const COLLECTION_NAME = 'profiles';
 
 // Gemini AI Configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyChssF7bAsNteszP0KFwNMV0_o5f3UNM8w';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 let genAI = null;
 let model = null;
 
