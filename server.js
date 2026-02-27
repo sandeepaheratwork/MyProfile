@@ -47,27 +47,29 @@ app.get('/mcp/sse', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     const transport = new SSEServerTransport('/mcp/messages', res);
-    mcpTransports.set(transport.sessionId, transport);
+    const sessionServer = createMcpServer();
+
+    mcpTransports.set(transport.sessionId, { transport, server: sessionServer });
 
     res.on('close', () => {
         mcpTransports.delete(transport.sessionId);
         console.log(`MCP session ${transport.sessionId} closed`);
     });
 
-    await mcpServer.connect(transport);
+    await sessionServer.connect(transport);
 });
 
 app.post('/mcp/messages', express.json(), async (req, res) => {
     const sessionId = req.query.sessionId;
-    const transport = mcpTransports.get(sessionId);
+    const sessionHandle = mcpTransports.get(sessionId);
 
-    if (!transport) {
+    if (!sessionHandle) {
         console.warn(`MCP session ${sessionId} not found for POST message`);
         return res.status(404).send('Session not found');
     }
 
     try {
-        await transport.handlePostMessage(req, res, req.body);
+        await sessionHandle.transport.handlePostMessage(req, res, req.body);
     } catch (error) {
         console.error(`Error handling MCP POST message: ${error.message}`);
         res.status(500).send(error.message);
@@ -137,71 +139,79 @@ const checkAdminRole = (req, res, next) => {
 // MCP Cloud Server Implementation
 // ==========================================
 
-const mcpServer = new McpServer({
-    name: "profile-manager-cloud",
-    version: "1.0.0",
-});
+// ==========================================
+// MCP Cloud Server Implementation
+// ==========================================
 
-// Tool: Search Profiles
-mcpServer.tool(
-    "search_profiles",
-    "Search for profiles by name, email, or role",
-    {
-        query: z.string().describe("Search query to find profiles")
-    },
-    async ({ query }) => {
-        try {
-            const collection = await getProfilesCollection();
-            const profiles = await collection.find({
-                $or: [
-                    { name: { $regex: query, $options: 'i' } },
-                    { email: { $regex: query, $options: 'i' } },
-                    { role: { $regex: query, $options: 'i' } }
-                ]
-            }).limit(10).toArray();
+function createMcpServer() {
+    const server = new McpServer({
+        name: "profile-manager-cloud",
+        version: "1.0.0",
+    });
 
-            return {
-                content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }]
-            };
-        } catch (error) {
-            return {
-                content: [{ type: "text", text: `Error searching profiles: ${error.message}` }],
-                isError: true
-            };
+    // Tool: Search Profiles
+    server.tool(
+        "search_profiles",
+        "Search for profiles by name, email, or role",
+        {
+            query: z.string().describe("Search query to find profiles")
+        },
+        async ({ query }) => {
+            try {
+                const collection = await getProfilesCollection();
+                const profiles = await collection.find({
+                    $or: [
+                        { name: { $regex: query, $options: 'i' } },
+                        { email: { $regex: query, $options: 'i' } },
+                        { role: { $regex: query, $options: 'i' } }
+                    ]
+                }).limit(10).toArray();
+
+                return {
+                    content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error searching profiles: ${error.message}` }],
+                    isError: true
+                };
+            }
         }
-    }
-);
+    );
 
-// Tool: Create Profile (Admin Only tools usually, but exposed here for MCP)
-mcpServer.tool(
-    "create_profile",
-    "Create a new profile",
-    {
-        name: z.string(),
-        email: z.string().email(),
-        role: z.string().optional()
-    },
-    async ({ name, email, role }) => {
-        try {
-            const collection = await getProfilesCollection();
-            const result = await collection.insertOne({
-                name,
-                email,
-                role,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            });
-            return {
-                content: [{ type: "text", text: `Profile created with ID: ${result.insertedId}` }]
-            };
-        } catch (error) {
-            return {
-                content: [{ type: "text", text: `Error creating profile: ${error.message}` }],
-                isError: true
-            };
+    // Tool: Create Profile
+    server.tool(
+        "create_profile",
+        "Create a new profile",
+        {
+            name: z.string(),
+            email: z.string().email(),
+            role: z.string().optional()
+        },
+        async ({ name, email, role }) => {
+            try {
+                const collection = await getProfilesCollection();
+                const result = await collection.insertOne({
+                    name,
+                    email,
+                    role,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                });
+                return {
+                    content: [{ type: "text", text: `Profile created with ID: ${result.insertedId}` }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error creating profile: ${error.message}` }],
+                    isError: true
+                };
+            }
         }
-    }
-);
+    );
+
+    return server;
+}
 
 // API Routes
 
