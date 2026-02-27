@@ -210,6 +210,60 @@ function createMcpServer() {
         }
     );
 
+    // Tool: Create Blog Post
+    server.tool(
+        "create_blog_post",
+        "Create a new technical blog post",
+        {
+            title: z.string().describe("Title of the blog post"),
+            content: z.string().describe("Content of the blog post (Markdown supported)"),
+            tags: z.array(z.string()).optional().describe("Tags for the blog post")
+        },
+        async ({ title, content, tags }) => {
+            try {
+                const collection = await getBlogsCollection();
+                const blog = {
+                    title,
+                    content,
+                    tags: tags || [],
+                    author: { name: 'Admin (MCP)' },
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+                const result = await collection.insertOne(blog);
+                return {
+                    content: [{ type: "text", text: `Blog post created with ID: ${result.insertedId}` }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error creating blog: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Tool: List Blog Posts
+    server.tool(
+        "list_blogs",
+        "List recent technical blog posts",
+        {},
+        async () => {
+            try {
+                const collection = await getBlogsCollection();
+                const blogs = await collection.find({}).sort({ createdAt: -1 }).limit(10).toArray();
+                return {
+                    content: [{ type: "text", text: JSON.stringify(blogs, null, 2) }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error listing blogs: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
+
     return server;
 }
 
@@ -228,26 +282,75 @@ app.post('/api/login', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Invalid email or password' });
         }
 
-        // Check if user is admin
-        if (!profile.role || profile.role.toLowerCase() !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Access denied. You are not an Admin.' });
-        }
-
         // Verify password
-        // Note: For existing users without password, we might need a setup flow.
-        // For this demo, we check exact match if password field exists.
         if (!profile.password || profile.password !== hashPassword(password)) {
             return res.status(401).json({ success: false, error: 'Invalid email or password' });
         }
 
+        // Get role (default to 'user' if not specified)
+        const role = (profile.role || 'user').toLowerCase();
+
         // Create session token
         const token = crypto.randomBytes(16).toString('hex');
-        sessions.set(token, { userId: profile._id, role: 'admin' });
+        sessions.set(token, { userId: profile._id, role });
 
         res.json({
             success: true,
             token,
-            user: { name: profile.name, email: profile.email, role: 'admin' }
+            user: {
+                id: profile._id,
+                name: profile.name,
+                email: profile.email,
+                role
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Register
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, error: 'Name, email and password are required' });
+        }
+
+        const collection = await getProfilesCollection();
+
+        // Check if user already exists
+        const existing = await collection.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+        if (existing) {
+            return res.status(400).json({ success: false, error: 'User already exists' });
+        }
+
+        const newUser = {
+            name,
+            email,
+            password: hashPassword(password),
+            role: 'user', // Default role
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        const result = await collection.insertOne(newUser);
+
+        // Auto-login after registration
+        const token = crypto.randomBytes(16).toString('hex');
+        sessions.set(token, { userId: result.insertedId, role: 'user' });
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: {
+                id: result.insertedId,
+                name,
+                email,
+                role: 'user'
+            }
         });
 
     } catch (error) {
@@ -328,9 +431,20 @@ app.post('/api/change-password', async (req, res) => {
     }
 });
 
-// Get all profiles
+// Get all profiles (Admin only, or public list if allowed - restricting to Admin for now as per request)
 app.get('/api/profiles', async (req, res) => {
     try {
+        const token = req.headers['x-auth-token'];
+        const session = sessions.get(token);
+
+        // If not admin, restrict visibility
+        if (!session || session.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied. Only Admins can view the user list.'
+            });
+        }
+
         const collection = await getProfilesCollection();
         const profiles = await collection.find({}).sort({ createdAt: -1 }).toArray();
         res.json({ success: true, profiles, count: profiles.length });
@@ -381,6 +495,90 @@ app.get('/api/profiles/:id', async (req, res) => {
         }
 
         res.json({ success: true, profile });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// Blog API Routes
+// ==========================================
+
+const BLOG_COLLECTION = 'blogs';
+
+async function getBlogsCollection() {
+    const database = await connectToMongoDB();
+    return database.collection(BLOG_COLLECTION);
+}
+
+// List all blogs
+app.get('/api/blogs', async (req, res) => {
+    try {
+        const collection = await getBlogsCollection();
+        const blogs = await collection.find({}).sort({ createdAt: -1 }).toArray();
+        res.json({ success: true, blogs, count: blogs.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get single blog
+app.get('/api/blogs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const collection = await getBlogsCollection();
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+
+        if (!blog) {
+            return res.status(404).json({ success: false, error: 'Blog post not found' });
+        }
+
+        res.json({ success: true, blog });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Create blog (Admin only)
+app.post('/api/blogs', checkAdminRole, async (req, res) => {
+    try {
+        const { title, content, tags } = req.body;
+        const token = req.headers['x-auth-token'];
+        const session = sessions.get(token);
+
+        if (!title || !content) {
+            return res.status(400).json({ success: false, error: 'Title and content are required' });
+        }
+
+        const collection = await getBlogsCollection();
+        const blog = {
+            title,
+            content,
+            tags: tags || [],
+            author: { id: session.userId, name: 'Admin' }, // We could fetch name if needed
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        const result = await collection.insertOne(blog);
+        res.status(201).json({ success: true, blog: { ...blog, _id: result.insertedId } });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Delete blog (Admin only)
+app.delete('/api/blogs/:id', checkAdminRole, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const collection = await getBlogsCollection();
+        const result = await collection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ success: false, error: 'Blog not found' });
+        }
+
+        res.json({ success: true, message: 'Blog deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -571,124 +769,185 @@ app.post('/api/chat', async (req, res) => {
             if (cleanedResponse.endsWith('```')) {
                 cleanedResponse = cleanedResponse.slice(0, -3);
             }
-            parsed = JSON.parse(cleanedResponse.trim());
-        } catch (parseError) {
-            console.error('Failed to parse AI response:', responseText);
-            return res.json({
-                success: true,
-                intent: 'unknown',
-                response: "I understood your message, but I'm having trouble processing it. Could you please try rephrasing?",
-                action: null
-            });
-        }
+            let intent;
+            let entities;
+            let response = "I'm not sure how to respond to that."; // Default response
 
-        const { intent, entities, response } = parsed;
-        let actionResult = null;
-        let profiles = [];
+            if (message.toLowerCase().includes('blog') || message.toLowerCase().includes('post') || message.toLowerCase().includes('technical')) {
+                const prompt = `
+                The user wants to interact with blogs.
+                Message: "${message}"
+                Extract: blogTitle, blogContent, tags (as array), searchQuery.
+                And determine intent: "create_blog", "list_blogs", or "search_blogs".
+                Return JSON only: { "intent": "string", "entities": { "blogTitle": "string or null", "blogContent": "string or null", "tags": "array or null", "searchQuery": "string or null" } }
+            `;
+                const result = await model.generateContent(prompt);
+                const aiResponse = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+                intent = aiResponse.intent;
+                entities = aiResponse.entities || {};
+            } else {
+                const prompt = `
+                Extract profile management intent from this message: "${message}"
+                Possible intents: "create", "search", "update", "list", "help".
+                Return JSON only: { "intent": "string", "entities": { "name": "string or null", "email": "string or null", "role": "string or null", "bio": "string or null", "searchQuery": "string or null" } }
+            `;
+                const result = await model.generateContent(prompt);
+                const aiResponse = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
+                intent = aiResponse.intent;
+                entities = aiResponse.entities || {};
+            }
 
-        const collection = await getProfilesCollection();
+            let actionResult = null;
+            let profiles = [];
 
-        // Execute the appropriate action based on intent
-        switch (intent) {
-            case 'create':
-                if (entities.name && entities.email) {
-                    const newProfile = {
-                        name: entities.name,
-                        email: entities.email,
-                        role: entities.role || undefined,
-                        bio: entities.bio || undefined,
-                        createdAt: new Date(),
-                        updatedAt: new Date()
-                    };
-                    const insertResult = await collection.insertOne(newProfile);
-                    actionResult = {
-                        type: 'created',
-                        profile: { ...newProfile, _id: insertResult.insertedId }
-                    };
-                } else {
-                    actionResult = {
-                        type: 'error',
-                        message: 'I need at least a name and email to create a profile.'
-                    };
-                }
-                break;
+            const collection = await getProfilesCollection();
 
-            case 'search':
-                if (entities.searchQuery) {
-                    const searchRegex = new RegExp(entities.searchQuery, 'i');
-                    profiles = await collection.find({
-                        $or: [
-                            { name: { $regex: searchRegex } },
-                            { email: { $regex: searchRegex } },
-                            { role: { $regex: searchRegex } }
-                        ]
-                    }).toArray();
-                    actionResult = {
-                        type: 'search',
-                        count: profiles.length,
-                        profiles
-                    };
-                }
-                break;
-
-            case 'update':
-                if (entities.name) {
-                    // Find the profile by name
-                    const nameRegex = new RegExp(entities.name, 'i');
-                    const existingProfile = await collection.findOne({ name: { $regex: nameRegex } });
-
-                    if (existingProfile) {
-                        const updates = { updatedAt: new Date() };
-                        if (entities.role) updates.role = entities.role;
-                        if (entities.email) updates.email = entities.email;
-                        if (entities.bio) updates.bio = entities.bio;
-                        if (entities.name && entities.name !== existingProfile.name) {
-                            updates.name = entities.name;
-                        }
-
-                        const updateResult = await collection.findOneAndUpdate(
-                            { _id: existingProfile._id },
-                            { $set: updates },
-                            { returnDocument: 'after' }
-                        );
-
+            // Execute the appropriate action based on intent
+            switch (intent) {
+                case 'create':
+                    if (entities.name && entities.email) {
+                        const newProfile = {
+                            name: entities.name,
+                            email: entities.email,
+                            role: entities.role || undefined,
+                            bio: entities.bio || undefined,
+                            createdAt: new Date(),
+                            updatedAt: new Date()
+                        };
+                        const insertResult = await collection.insertOne(newProfile);
                         actionResult = {
-                            type: 'updated',
-                            profile: updateResult
+                            type: 'created',
+                            profile: { ...newProfile, _id: insertResult.insertedId }
                         };
                     } else {
                         actionResult = {
-                            type: 'not_found',
-                            message: `I couldn't find a profile matching "${entities.name}".`
+                            type: 'error',
+                            message: 'I need at least a name and email to create a profile.'
                         };
                     }
-                }
-                break;
+                    break;
 
-            case 'list':
-                profiles = await collection.find({}).sort({ createdAt: -1 }).limit(10).toArray();
-                actionResult = {
-                    type: 'list',
-                    count: profiles.length,
-                    profiles
-                };
-                break;
+                case 'create_blog':
+                    if (entities.blogTitle && entities.blogContent) {
+                        const blogsCollection = await getBlogsCollection();
+                        const newBlog = {
+                            title: entities.blogTitle,
+                            content: entities.blogContent,
+                            tags: entities.tags || [],
+                            author: { name: 'Admin (AI)' },
+                            createdAt: new Date(),
+                            updatedAt: new Date()
+                        };
+                        const result = await blogsCollection.insertOne(newBlog);
+                        actionResult = {
+                            type: 'blog_created',
+                            blog: { ...newBlog, _id: result.insertedId }
+                        };
+                        response = `I've successfully posted your technical blog: "${entities.blogTitle}".`;
+                    } else {
+                        response = `I'd love to help you post a blog! Please provide a title and some content.`;
+                        actionResult = { type: 'error', message: 'Missing title or content' };
+                    }
+                    break;
 
-            case 'help':
-                actionResult = {
-                    type: 'help',
-                    message: 'I can help you manage profiles. Try saying things like:\n• "Create a profile for Jane Doe, jane@company.com, Product Manager"\n• "Find all engineers"\n• "Update John\'s role to Senior Developer"\n• "Show all profiles"'
-                };
-                break;
+                case 'search':
+                    if (entities.searchQuery) {
+                        const searchRegex = new RegExp(entities.searchQuery, 'i');
+                        profiles = await collection.find({
+                            $or: [
+                                { name: { $regex: searchRegex } },
+                                { email: { $regex: searchRegex } },
+                                { role: { $regex: searchRegex } }
+                            ]
+                        }).toArray();
+                        actionResult = {
+                            type: 'search',
+                            count: profiles.length,
+                            profiles
+                        };
+                    }
+                    break;
+
+                case 'update':
+                    if (entities.name) {
+                        // Find the profile by name
+                        const nameRegex = new RegExp(entities.name, 'i');
+                        const existingProfile = await collection.findOne({ name: { $regex: nameRegex } });
+
+                        if (existingProfile) {
+                            const updates = { updatedAt: new Date() };
+                            if (entities.role) updates.role = entities.role;
+                            if (entities.email) updates.email = entities.email;
+                            if (entities.bio) updates.bio = entities.bio;
+                            if (entities.name && entities.name !== existingProfile.name) {
+                                updates.name = entities.name;
+                            }
+
+                            const updateResult = await collection.findOneAndUpdate(
+                                { _id: existingProfile._id },
+                                { $set: updates },
+                                { returnDocument: 'after' }
+                            );
+
+                            actionResult = {
+                                type: 'updated',
+                                profile: updateResult
+                            };
+                        } else {
+                            actionResult = {
+                                type: 'not_found',
+                                message: `I couldn't find a profile matching "${entities.name}".`
+                            };
+                        }
+                    }
+                    break;
+
+                case 'list':
+                    profiles = await collection.find({}).sort({ createdAt: -1 }).limit(10).toArray();
+                    actionResult = {
+                        type: 'list',
+                        count: profiles.length,
+                        profiles
+                    };
+                    break;
+
+                case 'list_blogs':
+                    const bCollection = await getBlogsCollection();
+                    const recentBlogs = await bCollection.find({}).sort({ createdAt: -1 }).limit(5).toArray();
+                    actionResult = {
+                        type: 'blog_list',
+                        count: recentBlogs.length,
+                        blogs: recentBlogs
+                    };
+                    response = recentBlogs.length > 0
+                        ? `Here are the latest technical blog posts.`
+                        : `There are no blog posts yet. Would you like me to help you write one?`;
+                    break;
+
+                case 'help':
+                    actionResult = {
+                        type: 'help',
+                        message: 'I can help you manage profiles. Try saying things like:\n• "Create a profile for Jane Doe, jane@company.com, Product Manager"\n• "Find all engineers"\n• "Update John\'s role to Senior Developer"\n• "Show all profiles"'
+                    };
+                    break;
+            }
+
+            res.json({
+                success: true,
+                intent,
+                response,
+                action: actionResult
+            });
+
+        } catch (error) {
+            console.error('AI Processing error:', error);
+            res.json({
+                success: true,
+                intent: 'unknown',
+                response: "I encountered an error while processing that. Could you please try again?",
+                action: null
+            });
         }
-
-        res.json({
-            success: true,
-            intent,
-            response,
-            action: actionResult
-        });
-
     } catch (error) {
         console.error('Chat error:', error);
 

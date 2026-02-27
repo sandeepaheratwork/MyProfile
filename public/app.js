@@ -54,25 +54,47 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    // Login/Logout Buttons
+    // Login/Logout/Register Buttons
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const loginModal = document.getElementById('loginModal');
+    const showRegisterLink = document.getElementById('showRegisterLink');
+    const showLoginLink = document.getElementById('showLoginLink');
 
     if (loginBtn) loginBtn.addEventListener('click', () => {
         document.getElementById('loginModal').classList.add('active');
-        document.getElementById('loginEmail').focus();
+        showLoginForm();
     });
 
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
+    if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showRegisterForm();
+    });
+
+    if (showLoginLink) showLoginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showLoginForm();
+    });
+
     // Login Modal Controls
     document.getElementById('closeLoginModal').addEventListener('click', closeLoginModal);
-    document.getElementById('cancelLoginBtn').addEventListener('click', closeLoginModal);
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
+    document.getElementById('registerForm').addEventListener('submit', handleRegister);
 
     loginModal.addEventListener('click', (e) => {
         if (e.target === loginModal) closeLoginModal();
+    });
+
+    // Navigation Tabs
+    const tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            switchTab(tab.dataset.tab);
+        });
     });
 
     // Change Password
@@ -135,7 +157,41 @@ function setupEventListeners() {
 function closeLoginModal() {
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('loginForm').reset();
+    document.getElementById('registerForm').reset();
     document.getElementById('loginError').style.display = 'none';
+    document.getElementById('registerError').style.display = 'none';
+}
+
+function showRegisterForm() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('loginModalTitle').textContent = 'Create Account';
+    document.getElementById('regName').focus();
+}
+
+function showLoginForm() {
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loginModalTitle').textContent = 'Login';
+    document.getElementById('loginEmail').focus();
+}
+
+function switchTab(tabId) {
+    const blogsSection = document.getElementById('blogsSection');
+    const profilesSection = document.getElementById('profilesSection');
+    const searchSection = document.getElementById('searchSection');
+
+    if (tabId === 'blogs') {
+        blogsSection.style.display = 'block';
+        profilesSection.style.display = 'none';
+        searchSection.style.display = 'none';
+        loadBlogs();
+    } else {
+        blogsSection.style.display = 'none';
+        profilesSection.style.display = 'block';
+        searchSection.style.display = 'block';
+        loadProfiles();
+    }
 }
 
 function closeChangePasswordModal() {
@@ -217,11 +273,23 @@ async function handleLogin(e) {
         const data = await response.json();
 
         if (data.success) {
-            currentUser = { token: data.token, user: data.user };
+            currentUser = {
+                token: data.token,
+                user: data.user
+            };
             localStorage.setItem('adminSession', JSON.stringify(currentUser));
+
             closeLoginModal();
             updateUIForRole();
-            showToast('Logged in successfully', 'success');
+
+            // Auto-switch to blogs unless admin
+            if (currentUser.user.role === 'admin') {
+                switchTab('profiles');
+            } else {
+                switchTab('blogs');
+            }
+
+            showToast(`Welcome back, ${data.user.name}!`, 'success');
         } else {
             errorEl.textContent = data.error || 'Login failed';
             errorEl.style.display = 'block';
@@ -233,6 +301,143 @@ async function handleLogin(e) {
     } finally {
         submitBtn.classList.remove('loading');
     }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const name = document.getElementById('regName').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+    const errorEl = document.getElementById('registerError');
+    const submitBtn = document.getElementById('submitRegisterBtn');
+
+    submitBtn.classList.add('loading');
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            currentUser = {
+                token: data.token,
+                user: data.user
+            };
+            localStorage.setItem('adminSession', JSON.stringify(currentUser));
+
+            closeLoginModal();
+            updateUIForRole();
+            switchTab('blogs');
+
+            showToast(`Account created! Welcome, ${data.user.name}`, 'success');
+        } else {
+            errorEl.textContent = data.error || 'Registration failed';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
+}
+
+function updateUIForRole() {
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const adminBadge = document.getElementById('adminBadge');
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    const addProfileBtn = document.getElementById('addProfileBtn');
+    const mainNavTabs = document.getElementById('mainNavTabs');
+    const adminProfilesTab = document.getElementById('adminProfilesTab');
+    const newBlogBtn = document.getElementById('newBlogBtn');
+
+    if (currentUser) {
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'flex';
+        if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
+
+        mainNavTabs.style.display = 'flex';
+
+        if (currentUser.user.role === 'admin') {
+            if (adminBadge) adminBadge.style.display = 'flex';
+            if (addProfileBtn) addProfileBtn.style.display = 'flex';
+            if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
+            if (newBlogBtn) newBlogBtn.style.display = 'block';
+        } else {
+            if (adminBadge) adminBadge.style.display = 'none';
+            if (addProfileBtn) addProfileBtn.style.display = 'none';
+            if (adminProfilesTab) adminProfilesTab.style.display = 'none';
+            if (newBlogBtn) newBlogBtn.style.display = 'none';
+        }
+
+        // Initial view
+        if (currentUser.user.role !== 'admin') {
+            switchTab('blogs');
+        } else {
+            switchTab('profiles');
+        }
+    } else {
+        if (loginBtn) loginBtn.style.display = 'flex';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (adminBadge) adminBadge.style.display = 'none';
+        if (changePasswordBtn) changePasswordBtn.style.display = 'none';
+        if (addProfileBtn) addProfileBtn.style.display = 'flex'; // Public visibility?
+        mainNavTabs.style.display = 'none';
+        switchTab('profiles'); // Default for guests
+    }
+}
+
+async function loadBlogs() {
+    const blogsGrid = document.getElementById('blogsGrid');
+    const loadingState = document.getElementById('blogLoadingState');
+    const emptyState = document.getElementById('blogEmptyState');
+
+    loadingState.style.display = 'flex';
+    emptyState.style.display = 'none';
+    blogsGrid.innerHTML = '';
+
+    try {
+        const response = await fetch('/api/blogs');
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.blogs.length === 0) {
+                emptyState.style.display = 'block';
+            } else {
+                renderBlogs(data.blogs);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading blogs:', error);
+    } finally {
+        loadingState.style.display = 'none';
+    }
+}
+
+function renderBlogs(blogs) {
+    const blogsGrid = document.getElementById('blogsGrid');
+    blogsGrid.innerHTML = blogs.map(blog => `
+        <div class="blog-card" onclick="showBlogDetail('${blog._id}')">
+            <h3>${escapeHtml(blog.title)}</h3>
+            <div class="blog-meta">
+                <span>By ${escapeHtml(blog.author.name)}</span>
+                <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+            </div>
+            <div class="blog-content-preview">
+                ${escapeHtml(blog.content.substring(0, 150))}...
+            </div>
+            <div class="blog-tags">
+                ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
+            </div>
+        </div>
+    `).join('');
 }
 
 function handleLogout() {
@@ -758,9 +963,13 @@ async function handleChatSubmit(e) {
                 addChatMessage(data.response, 'ai', data.action);
             }
 
-            // Refresh profiles if data changed
-            if (data.action && ['created', 'updated', 'search', 'list'].includes(data.action.type)) {
-                loadProfiles(searchInput.value);
+            // Refresh data if actions occurred
+            if (data.action) {
+                if (['created', 'updated', 'search', 'list'].includes(data.action.type)) {
+                    loadProfiles(searchInput.value);
+                } else if (['blog_created', 'blog_list'].includes(data.action.type)) {
+                    loadBlogs();
+                }
             }
         } else {
             addChatMessage(data.response || data.error || 'Sorry, I encountered an error.', 'ai-error');
@@ -825,6 +1034,26 @@ function addChatMessage(content, type, action = null) {
             case 'not_found':
             case 'error':
                 // Error message already in content
+                break;
+
+            case 'blog_created':
+                html += `<div class="message-profiles">`;
+                html += `<div class="message-profile-card">`;
+                html += `<strong>Blog Posted:</strong> ${escapeHtml(action.blog.title)}`;
+                html += `</div></div>`;
+                break;
+
+            case 'blog_list':
+                if (action.blogs && action.blogs.length > 0) {
+                    html += `<div class="message-profiles">`;
+                    action.blogs.forEach(blog => {
+                        html += `<div class="message-profile-card">`;
+                        html += `<strong>${escapeHtml(blog.title)}</strong>`;
+                        html += `<br><span style="font-size: 0.75rem;">${new Date(blog.createdAt).toLocaleDateString()}</span>`;
+                        html += `</div>`;
+                    });
+                    html += `</div>`;
+                }
                 break;
 
             case 'help':

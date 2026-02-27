@@ -68,8 +68,28 @@
 
     <!-- Main Content -->
     <main class="main-content">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs" id="mainNavTabs" style="display: none; margin-bottom: 2rem;">
+            <button class="nav-tab active" data-tab="blogs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                Technical Blogs
+            </button>
+            <button class="nav-tab" data-tab="profiles" id="adminProfilesTab" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                User Management
+            </button>
+        </div>
+
         <!-- Search Section -->
-        <section class="search-section">
+        <section class="search-section" id="searchSection">
             <div class="search-wrapper">
                 <div class="search-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -88,8 +108,29 @@
             </div>
         </section>
 
+        <!-- Blogs Section -->
+        <section class="blogs-section" id="blogsSection" style="display: none;">
+            <div class="section-header"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Recent Technical Insights</h2>
+                <button class="btn btn-primary btn-sm" id="newBlogBtn" style="display: none;">
+                    New Post
+                </button>
+            </div>
+            <div class="blogs-grid" id="blogsGrid">
+                <!-- Blog cards will be dynamically inserted here -->
+            </div>
+            <div id="blogLoadingState" class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading blogs...</p>
+            </div>
+            <div id="blogEmptyState" class="empty-state" style="display: none;">
+                <p>No technical blogs yet. Stay tuned!</p>
+            </div>
+        </section>
+
         <!-- Profiles Grid -->
-        <section class="profiles-section">
+        <section class="profiles-section" id="profilesSection">
             <div class="profiles-grid" id="profilesGrid">
                 <!-- Profile cards will be dynamically inserted here -->
             </div>
@@ -123,7 +164,7 @@
     <div class="modal-overlay" id="loginModal">
         <div class="modal" style="max-width: 400px;">
             <div class="modal-header">
-                <h2>Admin Login</h2>
+                <h2 id="loginModalTitle">Login</h2>
                 <button class="modal-close" id="closeLoginModal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -131,29 +172,57 @@
                     </svg>
                 </button>
             </div>
+
+            <!-- Login Form -->
             <form id="loginForm" class="modal-form">
                 <div class="form-group">
                     <label for="loginEmail">Email Address</label>
-                    <input type="email" id="loginEmail" class="form-input" placeholder="admin@example.com" required>
+                    <input type="email" id="loginEmail" class="form-input" placeholder="email@example.com" required>
                 </div>
-
                 <div class="form-group">
                     <label for="loginPassword">Password</label>
                     <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" required>
                 </div>
-
                 <div id="loginError"
                     style="color: var(--color-danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
-
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelLoginBtn">
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary" id="submitLoginBtn">
+                    <button type="submit" class="btn btn-primary" id="submitLoginBtn" style="width: 100%;">
                         <span class="btn-text">Login</span>
                         <div class="btn-spinner"></div>
                     </button>
                 </div>
+                <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--color-text-muted);">
+                    Don't have an account? <a href="#" id="showRegisterLink"
+                        style="color: var(--color-accent-primary); font-weight: 500;">Register here</a>
+                </p>
+            </form>
+
+            <!-- Register Form (Initially Hidden) -->
+            <form id="registerForm" class="modal-form" style="display: none;">
+                <div class="form-group">
+                    <label for="regName">Full Name</label>
+                    <input type="text" id="regName" class="form-input" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" class="form-input" placeholder="email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" class="form-input" placeholder="Choose a password" required>
+                </div>
+                <div id="registerError"
+                    style="color: var(--color-danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary" id="submitRegisterBtn" style="width: 100%;">
+                        <span class="btn-text">Register</span>
+                        <div class="btn-spinner"></div>
+                    </button>
+                </div>
+                <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--color-text-muted);">
+                    Already have an account? <a href="#" id="showLoginLink"
+                        style="color: var(--color-accent-primary); font-weight: 500;">Login here</a>
+                </p>
             </form>
         </div>
     </div>
