@@ -339,27 +339,6 @@ app.get('/api/profiles', async (req, res) => {
     }
 });
 
-// Get single profile by ID
-app.get('/api/profiles/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const collection = await getProfilesCollection();
-
-        const profile = await collection.findOne({ _id: new ObjectId(id) });
-
-        if (!profile) {
-            return res.status(404).json({
-                success: false,
-                error: 'Profile not found'
-            });
-        }
-
-        res.json({ success: true, profile });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // Search profiles
 app.get('/api/profiles/search', async (req, res) => {
     try {
@@ -381,6 +360,27 @@ app.get('/api/profiles/search', async (req, res) => {
         }).sort({ createdAt: -1 }).toArray();
 
         res.json({ success: true, profiles, count: profiles.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get single profile by ID
+app.get('/api/profiles/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const collection = await getProfilesCollection();
+
+        const profile = await collection.findOne({ _id: new ObjectId(id) });
+
+        if (!profile) {
+            return res.status(404).json({
+                success: false,
+                error: 'Profile not found'
+            });
+        }
+
+        res.json({ success: true, profile });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
