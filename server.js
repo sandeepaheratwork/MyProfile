@@ -33,6 +33,56 @@ if (GEMINI_API_KEY) {
 
 // Middleware
 app.use(cors());
+
+// MCP SSE Routes (Must be before any global body-parsers to avoid stream consumption)
+const mcpTransports = new Map();
+
+app.get('/mcp/sse', async (req, res) => {
+    console.log('New MCP Cloud connection (SSE)');
+
+    // Cloud Run / Proxy settings to prevent buffering
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Connection', 'keep-alive');
+
+    const transport = new SSEServerTransport('/mcp/messages', res);
+    mcpTransports.set(transport.sessionId, transport);
+
+    res.on('close', () => {
+        mcpTransports.delete(transport.sessionId);
+        console.log(`MCP session ${transport.sessionId} closed`);
+    });
+
+    await mcpServer.connect(transport);
+});
+
+app.post('/mcp/messages', async (req, res) => {
+    const sessionId = req.query.sessionId;
+    const transport = mcpTransports.get(sessionId);
+
+    if (!transport) {
+        console.warn(`MCP session ${sessionId} not found for POST message`);
+        return res.status(404).send('Session not found');
+    }
+
+    try {
+        await transport.handlePostMessage(req, res);
+    } catch (error) {
+        console.error(`Error handling MCP POST message: ${error.message}`);
+        res.status(500).send(error.message);
+    }
+});
+
+app.get('/mcp', (req, res) => {
+    res.json({
+        name: "Profile Manager MCP Cloud",
+        status: "active",
+        endpoints: { sse: "/mcp/sse", messages: "/mcp/messages" },
+        description: "Connect your MCP client to the SSE endpoint to manage profiles remotely."
+    });
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -152,61 +202,6 @@ mcpServer.tool(
         }
     }
 );
-
-// MCP Transport Store
-const mcpTransports = new Map();
-
-// MCP SSE Routes
-app.get('/mcp/sse', async (req, res) => {
-    console.log('New MCP Cloud connection (SSE)');
-
-    // Cloud Run / Proxy settings to prevent buffering
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.setHeader('Connection', 'keep-alive');
-
-    const transport = new SSEServerTransport('/mcp/messages', res);
-    mcpTransports.set(transport.sessionId, transport);
-
-    res.on('close', () => {
-        mcpTransports.delete(transport.sessionId);
-        console.log(`MCP session ${transport.sessionId} closed`);
-    });
-
-    await mcpServer.connect(transport);
-});
-
-// Use raw body for MCP messages as the SDK handles parsing
-app.post('/mcp/messages', bodyParser.text({ type: '*/*' }), async (req, res) => {
-    const sessionId = req.query.sessionId;
-    const transport = mcpTransports.get(sessionId);
-
-    if (!transport) {
-        console.warn(`MCP session ${sessionId} not found for POST message`);
-        return res.status(404).send('Session not found');
-    }
-
-    try {
-        await transport.handlePostMessage(req, res);
-    } catch (error) {
-        console.error(`Error handling MCP POST message: ${error.message}`);
-        res.status(500).send(error.message);
-    }
-});
-
-// Info route for the user
-app.get('/mcp', (req, res) => {
-    res.json({
-        name: "Profile Manager MCP Cloud",
-        status: "active",
-        endpoints: {
-            sse: "/mcp/sse",
-            messages: "/mcp/messages"
-        },
-        description: "Connect your MCP client to the SSE endpoint to manage profiles remotely."
-    });
-});
 
 // API Routes
 
