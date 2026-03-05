@@ -326,7 +326,8 @@ app.post('/api/login', async (req, res) => {
                 id: profile._id,
                 name: profile.name,
                 email: profile.email,
-                role
+                role,
+                imageUrl: profile.imageUrl
             }
         });
 
@@ -373,7 +374,8 @@ app.post('/api/register', async (req, res) => {
                 id: result.insertedId,
                 name,
                 email,
-                role: 'user'
+                role: 'user',
+                imageUrl: newUser.imageUrl
             }
         });
 

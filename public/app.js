@@ -391,12 +391,23 @@ function updateUIForRole(switchView = true) {
     const adminProfilesTab = document.getElementById('adminProfilesTab');
     const userProfileTab = document.getElementById('userProfileTab');
     const newBlogBtn = document.getElementById('newBlogBtn');
+    const userAvatar = document.getElementById('userAvatar');
 
     if (currentUser) {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
         mainNavTabs.style.display = 'flex';
+
+        // Update Header Avatar
+        if (userAvatar) {
+            const user = currentUser.user;
+            const initials = getInitials(user.name);
+            userAvatar.innerHTML = user.imageUrl
+                ? `<img src="${user.imageUrl}" alt="${escapeHtml(user.name)}">`
+                : initials;
+            userAvatar.style.display = 'flex';
+        }
 
         if (currentUser.user.role === 'admin') {
             if (adminBadge) adminBadge.style.display = 'flex';
@@ -419,6 +430,7 @@ function updateUIForRole(switchView = true) {
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
         if (addProfileBtn) addProfileBtn.style.display = 'none';
+        if (userAvatar) userAvatar.style.display = 'none';
         mainNavTabs.style.display = 'none';
         // Guests can see blogs and are shown New Post to encourage registration
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
