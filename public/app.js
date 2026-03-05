@@ -225,6 +225,41 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Blog Modal Preview Tabs
+    const blogWriteTab = document.getElementById('blogWriteTab');
+    const blogPreviewTab = document.getElementById('blogPreviewTab');
+    const blogPreviewContent = document.getElementById('blogPreviewContent');
+
+    if (blogWriteTab && blogPreviewTab) {
+        blogWriteTab.addEventListener('click', () => {
+            blogWriteTab.classList.add('active');
+            blogWriteTab.style.borderBottomColor = 'var(--color-accent-primary)';
+            blogWriteTab.style.color = 'var(--color-accent-primary)';
+            blogPreviewTab.classList.remove('active');
+            blogPreviewTab.style.borderBottomColor = 'transparent';
+            blogPreviewTab.style.color = 'var(--color-text-muted)';
+
+            blogContentInput.style.display = 'block';
+            blogPreviewContent.style.display = 'none';
+        });
+
+        blogPreviewTab.addEventListener('click', () => {
+            blogPreviewTab.classList.add('active');
+            blogPreviewTab.style.borderBottomColor = 'var(--color-accent-primary)';
+            blogPreviewTab.style.color = 'var(--color-accent-primary)';
+            blogWriteTab.classList.remove('active');
+            blogWriteTab.style.borderBottomColor = 'transparent';
+            blogWriteTab.style.color = 'var(--color-text-muted)';
+
+            blogContentInput.style.display = 'none';
+            blogPreviewContent.style.display = 'block';
+
+            // Render markdown
+            const content = blogContentInput.value || '*No content to preview*';
+            blogPreviewContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
+        });
+    }
 }
 
 function showForgotPasswordForm() {
@@ -519,9 +554,13 @@ async function loadBlogs() {
     const loadingState = document.getElementById('blogLoadingState');
     const emptyState = document.getElementById('blogEmptyState');
 
-    loadingState.style.display = 'flex';
+    // Disable reading progress bar when not in detail
+    const progressBar = document.getElementById('readingProgressBar');
+    if (progressBar) progressBar.style.display = 'none';
+
+    loadingState.style.display = 'none';
     emptyState.style.display = 'none';
-    blogsGrid.innerHTML = '';
+    blogsGrid.innerHTML = generateSkeletons(3, 'blog');
 
     try {
         const response = await fetch('/api/blogs');
@@ -545,6 +584,10 @@ function closeBlogModal() {
     document.getElementById('blogModal').classList.remove('active');
     document.getElementById('blogForm').reset();
     document.getElementById('submitBlogBtn').classList.remove('loading');
+
+    // Reset tabs
+    const blogWriteTab = document.getElementById('blogWriteTab');
+    if (blogWriteTab) blogWriteTab.click();
 }
 
 async function handleForgotPassword(e) {
@@ -725,6 +768,13 @@ async function showBlogDetail(id) {
             `;
             document.getElementById('blogsGrid').innerHTML = detailHtml;
             window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Enable reading progress bar
+            const progressBar = document.getElementById('readingProgressBar');
+            if (progressBar) {
+                progressBar.style.display = 'block';
+                progressBar.style.width = '0%';
+            }
         }
     } catch (error) {
         console.error('Error loading blog detail:', error);
@@ -744,6 +794,10 @@ function renderBlogs(blogs) {
         // Clean content for preview (remove markdown images and trim)
         let cleanContent = blog.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150);
         if (blog.content.length > 150) cleanContent += '...';
+
+        // Calculate reading time (avg 200 words per minute)
+        const words = blog.content.trim().split(/\s+/).length;
+        const readingTime = Math.max(1, Math.ceil(words / 200));
 
         return `
             <div class="blog-card" onclick="showBlogDetail('${blog._id}')" style="position: relative;">
@@ -768,6 +822,13 @@ function renderBlogs(blogs) {
                     <div class="blog-meta">
                         <span>By ${escapeHtml(blog.author.name)}</span>
                         <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+                        <div class="reading-time">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            ${readingTime} min read
+                        </div>
                     </div>
                     <div class="blog-content-preview">
                         ${escapeHtml(cleanContent)}
@@ -1060,10 +1121,10 @@ function createProfileCard(profile) {
 }
 
 function showLoading(show) {
-    loadingState.classList.toggle('active', show);
     if (show) {
-        profilesGrid.innerHTML = '';
+        profilesGrid.innerHTML = generateSkeletons(4, 'profile');
         emptyState.style.display = 'none';
+        loadingState.style.display = 'none'; // Use skeletons instead of generic spinner
     }
 }
 
@@ -1281,6 +1342,62 @@ function showToast(message, type = 'success') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+
+// Reading Time helper
+function getReadingTime(text) {
+    const words = text.trim().split(/\s+/).length;
+    return Math.max(1, Math.ceil(words / 200));
+}
+
+// Generate Skeletons
+function generateSkeletons(count, type) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        if (type === 'blog') {
+            html += `
+                <div class="blog-card">
+                    <div class="blog-card-image skeleton"></div>
+                    <div class="blog-card-content">
+                        <div class="skeleton-text" style="width: 80%; height: 1.5rem; margin-bottom: 1rem;"></div>
+                        <div class="skeleton-text short"></div>
+                        <div class="skeleton-text" style="margin-top: 1rem;"></div>
+                        <div class="skeleton-text"></div>
+                        <div class="skeleton-text short"></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="profile-card">
+                    <div class="profile-header">
+                        <div class="profile-avatar skeleton skeleton-circle"></div>
+                        <div class="profile-info">
+                            <div class="skeleton-text" style="width: 120px;"></div>
+                            <div class="skeleton-text short"></div>
+                        </div>
+                    </div>
+                    <div class="profile-body">
+                        <div class="skeleton-text"></div>
+                        <div class="skeleton-text"></div>
+                        <div class="skeleton-text short"></div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    return html;
+}
+
+// Scroll Progress Bar Logic
+window.addEventListener('scroll', () => {
+    const progressBar = document.getElementById('readingProgressBar');
+    if (!progressBar || progressBar.style.display === 'none') return;
+
+    const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+    const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+    const scrolled = (winScroll / height) * 100;
+    progressBar.style.width = scrolled + "%";
+});
 
 // ========================================
 // Utility Functions

@@ -1509,3 +1509,65 @@ body::before {
     color: var(--color-text-muted);
     font-style: italic;
 }
+
+/* Skeleton Loading Animation */
+@keyframes skeleton-pulse {
+    0% {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    50% {
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    100% {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+}
+
+.skeleton {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: var(--radius-md);
+}
+
+.skeleton-text {
+    height: 1rem;
+    margin-bottom: 0.5rem;
+    width: 100%;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-circle {
+    border-radius: 50%;
+}
+
+/* Reading Time Badge */
+.reading-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.reading-time svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* Reading Progress Bar */
+.reading-progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: var(--color-accent-primary);
+    width: 0%;
+    z-index: 9999;
+    transition: width 0.1s ease;
+    display: none;
+}

@@ -14,6 +14,7 @@
 </head>
 
 <body>
+    <div id="readingProgressBar" class="reading-progress-bar"></div>
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -427,7 +428,7 @@
 
     <!-- Create Blog Modal -->
     <div class="modal-overlay" id="blogModal">
-        <div class="modal" style="max-width: 600px;">
+        <div class="modal" style="max-width: 800px;">
             <div class="modal-header">
                 <h2>Create New Post</h2>
                 <button class="modal-close" id="closeBlogModal">
@@ -436,6 +437,13 @@
                         <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                 </button>
+            </div>
+            <div class="modal-tabs"
+                style="display: flex; gap: 1rem; margin: 0 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--color-border);">
+                <button type="button" class="modal-tab active" id="blogWriteTab"
+                    style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--color-accent-primary); color: var(--color-accent-primary); font-weight: 600; cursor: pointer;">Write</button>
+                <button type="button" class="modal-tab" id="blogPreviewTab"
+                    style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--color-text-muted); font-weight: 600; cursor: pointer;">Preview</button>
             </div>
             <form id="blogForm" class="modal-form">
                 <div class="form-group">
@@ -468,6 +476,10 @@
                     <textarea id="blogContentInput" class="form-input form-textarea"
                         placeholder="Write your technical insight... Tip: You can drag and drop images here!" rows="12"
                         required></textarea>
+                    <div id="blogPreviewContent" class="markdown-body"
+                        style="display: none; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 300px; max-height: 400px; overflow-y: auto;">
+                        <!-- Rendered preview will go here -->
+                    </div>
                 </div>
 
                 <div class="modal-actions">
