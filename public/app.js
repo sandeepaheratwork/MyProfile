@@ -542,6 +542,12 @@ async function loadMyProfile() {
         const response = await fetch('/api/profiles/me', {
             headers: { 'x-auth-token': currentUser ? currentUser.token : '' }
         });
+
+        if (response.status === 401 || response.status === 403) {
+            handleUnauthorized();
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -613,7 +619,15 @@ async function loadProfiles(query = '') {
             ? `${API_URL}/search?q=${encodeURIComponent(query)}`
             : API_URL;
 
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: currentUser ? { 'x-auth-token': currentUser.token } : {}
+        });
+
+        if (response.status === 401 || response.status === 403) {
+            handleUnauthorized();
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -628,6 +642,14 @@ async function loadProfiles(query = '') {
     } finally {
         showLoading(false);
     }
+}
+
+// Clears a stale or invalid session (e.g. old token from before JWT migration)
+function handleUnauthorized() {
+    localStorage.removeItem('currentUser');
+    currentUser = null;
+    updateUIForRole(true);
+    showToast('Session expired. Please log in again.', 'error');
 }
 
 async function createProfile(profileData) {
