@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
@@ -389,9 +390,24 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="blogContentInput">Content (Markdown supported)</label>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label for="blogContentInput" style="margin-bottom: 0;">Content (Markdown supported)</label>
+                        <button type="button" class="btn btn-secondary btn-sm" id="blogInsertImageBtn"
+                            style="padding: 4px 8px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                style="width: 14px; height: 14px; margin-right: 4px;">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                            Insert Image
+                        </button>
+                        <input type="file" id="blogImageInput" accept="image/*" style="display: none;">
+                    </div>
                     <textarea id="blogContentInput" class="form-input form-textarea"
-                        placeholder="Write your technical insight..." rows="12" required></textarea>
+                        placeholder="Write your technical insight... Tip: You can drag and drop images here!" rows="12"
+                        required></textarea>
                 </div>
 
                 <div class="modal-actions">

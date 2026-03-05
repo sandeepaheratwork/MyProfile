@@ -174,10 +174,43 @@ function setupEventListeners() {
     document.getElementById('cancelBlogBtn').addEventListener('click', closeBlogModal);
     document.getElementById('blogForm').addEventListener('submit', handleBlogSubmit);
 
-    const blogModal = document.getElementById('blogModal');
-    if (blogModal) blogModal.addEventListener('click', (e) => {
-        if (e.target === blogModal) closeBlogModal();
-    });
+    // Blog Image Insertion
+    const blogInsertImageBtn = document.getElementById('blogInsertImageBtn');
+    const blogImageInput = document.getElementById('blogImageInput');
+    const blogContentInput = document.getElementById('blogContentInput');
+
+    if (blogInsertImageBtn && blogImageInput) {
+        blogInsertImageBtn.addEventListener('click', () => blogImageInput.click());
+        blogImageInput.addEventListener('change', (e) => handleBlogImageUpload(e.target.files[0]));
+    }
+
+    if (blogContentInput) {
+        // Drag and Drop
+        blogContentInput.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            blogContentInput.style.borderColor = 'var(--color-accent-primary)';
+        });
+        blogContentInput.addEventListener('dragleave', () => {
+            blogContentInput.style.borderColor = '';
+        });
+        blogContentInput.addEventListener('drop', (e) => {
+            e.preventDefault();
+            blogContentInput.style.borderColor = '';
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleBlogImageUpload(e.dataTransfer.files[0]);
+            }
+        });
+        // Paste support
+        blogContentInput.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    handleBlogImageUpload(file);
+                }
+            }
+        });
+    }
 }
 
 function closeLoginModal() {
@@ -471,6 +504,45 @@ function closeBlogModal() {
     document.getElementById('submitBlogBtn').classList.remove('loading');
 }
 
+async function handleBlogImageUpload(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showToast('Please select an image file.', 'error');
+        return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) { // 2MB limit for base64
+        showToast('Image is too large. Max 2MB.', 'error');
+        return;
+    }
+
+    const blogContentInput = document.getElementById('blogContentInput');
+    const submitBtn = document.getElementById('submitBlogBtn');
+
+    // Add a placeholder while processing
+    const placeholder = `\n![Uploading ${file.name}...]()\n`;
+    const cursorFallback = blogContentInput.value.length;
+    const start = blogContentInput.selectionStart ?? cursorFallback;
+    const end = blogContentInput.selectionEnd ?? cursorFallback;
+    blogContentInput.value = blogContentInput.value.substring(0, start) + placeholder + blogContentInput.value.substring(end);
+
+    try {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result;
+            const markdownImage = `\n![${file.name}](${base64})\n`;
+            blogContentInput.value = blogContentInput.value.replace(placeholder, markdownImage);
+            blogContentInput.dispatchEvent(new Event('input')); // Trigger resize if any
+        };
+        reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Error processing image:', error);
+        blogContentInput.value = blogContentInput.value.replace(placeholder, '');
+        showToast('Failed to process image.', 'error');
+    }
+}
+
 async function handleBlogSubmit(e) {
     e.preventDefault();
     const title = document.getElementById('blogTitleInput').value.trim();
@@ -514,6 +586,11 @@ async function showBlogDetail(id) {
 
         if (data.success) {
             const blog = data.blog;
+
+            // Use marked to parse markdown content safely
+            // We still want to be careful with HTML injection, but marked handles most things
+            const renderedContent = typeof marked !== 'undefined' ? marked.parse(blog.content) : escapeHtml(blog.content).replace(/\n/g, '<br>');
+
             const detailHtml = `
                 <div class="blog-detail">
                     <button class="btn btn-secondary btn-sm" style="margin-bottom: 1.5rem;" onclick="loadBlogs()">← Back to List</button>
@@ -522,8 +599,8 @@ async function showBlogDetail(id) {
                         <span>By ${escapeHtml(blog.author.name)}</span> | 
                         <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <div class="blog-full-content" style="margin-top: 1.5rem; line-height: 1.6; white-space: pre-wrap; background: var(--color-bg-secondary); padding: 1.5rem; border-radius: 8px;">
-                        ${escapeHtml(blog.content)}
+                    <div class="blog-content markdown-body" style="margin-top: 1.5rem;">
+                        ${renderedContent}
                     </div>
                     <div class="blog-tags" style="margin-top: 2rem;">
                         ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
