@@ -47,7 +47,8 @@ function renderProfile(profile) {
         : initials;
 
     // Update document title
-    document.title = `${profile.name} - Portfolio | Profile Manager`;
+    document.title = `${profile.name} | TechForge`;
+
 
     const html = `
         <div class="portfolio-header">

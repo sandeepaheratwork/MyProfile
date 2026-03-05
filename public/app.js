@@ -1,5 +1,6 @@
 /**
- * Profile Manager - Client Application
+ * TechForge - Client Application
+
  */
 
 // API Base URL
