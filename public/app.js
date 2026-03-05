@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUser = JSON.parse(storedSession);
     }
 
-    loadProfiles();
     setupEventListeners();
     updateUIForRole(); // Ensure UI is updated based on current state (null or user)
 });
@@ -279,6 +278,16 @@ function switchTab(tabId) {
     const searchSection = document.getElementById('searchSection');
     const myProfileSection = document.getElementById('myProfileSection');
 
+    // Update active class on nav tabs
+    const tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(tab => {
+        if (tab.dataset.tab === tabId) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
     // Hide all
     blogsSection.style.display = 'none';
     profilesSection.style.display = 'none';
@@ -386,12 +395,8 @@ async function handleLogin(e) {
             closeLoginModal();
             updateUIForRole();
 
-            // Auto-switch to blogs unless admin
-            if (currentUser.user.role === 'admin') {
-                switchTab('profiles');
-            } else {
-                switchTab('blogs');
-            }
+            // All users now start on blogs by default
+            switchTab('blogs');
 
             showToast(`Welcome back, ${data.user.name}!`, 'success');
         } else {
