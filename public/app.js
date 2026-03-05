@@ -50,7 +50,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setupEventListeners();
-    updateUIForRole(); // Ensure UI is updated based on current state (null or user)
+    updateUIForRole(false); // Don't switch tab automatically here
+
+    // Handle initial route
+    handleRouting();
+
+    // Listen for back/forward buttons
+    window.addEventListener('hashchange', handleRouting);
 });
 
 function setupEventListeners() {
@@ -307,7 +313,23 @@ function showLoginForm() {
     document.getElementById('loginEmail').focus();
 }
 
-function switchTab(tabId) {
+function handleRouting() {
+    const hash = window.location.hash;
+
+    if (hash.startsWith('#blog-')) {
+        const blogId = hash.replace('#blog-', '');
+        showBlogDetail(blogId, false); // false = don't push state
+    } else if (hash === '#profiles') {
+        switchTab('profiles', false);
+    } else if (hash === '#my-profile') {
+        switchTab('my-profile', false);
+    } else {
+        // Default to blogs
+        switchTab('blogs', false);
+    }
+}
+
+function switchTab(tabId, pushState = true) {
     const blogsSection = document.getElementById('blogsSection');
     const profilesSection = document.getElementById('profilesSection');
     const searchSection = document.getElementById('searchSection');
@@ -322,6 +344,10 @@ function switchTab(tabId) {
             tab.classList.remove('active');
         }
     });
+
+    if (pushState) {
+        window.location.hash = tabId;
+    }
 
     // Hide all
     blogsSection.style.display = 'none';
@@ -738,7 +764,11 @@ async function handleBlogSubmit(e) {
     }
 }
 
-async function showBlogDetail(id) {
+async function showBlogDetail(id, pushState = true) {
+    if (pushState) {
+        window.location.hash = `blog-${id}`;
+    }
+
     try {
         const response = await fetch(`/api/blogs/${id}`);
         const data = await response.json();
@@ -752,7 +782,7 @@ async function showBlogDetail(id) {
 
             const detailHtml = `
                 <div class="blog-detail">
-                    <button class="btn btn-secondary btn-sm" style="margin-bottom: 1.5rem;" onclick="loadBlogs()">← Back to List</button>
+                    <button class="btn btn-secondary btn-sm" style="margin-bottom: 1.5rem;" onclick="switchTab('blogs')">← Back to List</button>
                     <h2>${escapeHtml(blog.title)}</h2>
                     <div class="blog-meta">
                         <span>By ${escapeHtml(blog.author.name)}</span> | 
