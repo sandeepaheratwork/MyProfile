@@ -371,7 +371,7 @@ async function handleRegister(e) {
     }
 }
 
-function updateUIForRole() {
+function updateUIForRole(switchView = true) {
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const adminBadge = document.getElementById('adminBadge');
@@ -386,7 +386,6 @@ function updateUIForRole() {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
-
         mainNavTabs.style.display = 'flex';
 
         if (currentUser.user.role === 'admin') {
@@ -394,29 +393,25 @@ function updateUIForRole() {
             if (addProfileBtn) addProfileBtn.style.display = 'flex';
             if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
             if (userProfileTab) userProfileTab.style.display = 'none';
-            if (newBlogBtn) newBlogBtn.style.display = 'block';
+            if (newBlogBtn) newBlogBtn.style.display = 'flex';
+            if (switchView) switchTab('blogs'); // Admins also start on blogs
         } else {
             if (adminBadge) adminBadge.style.display = 'none';
             if (addProfileBtn) addProfileBtn.style.display = 'none';
             if (adminProfilesTab) adminProfilesTab.style.display = 'none';
             if (userProfileTab) userProfileTab.style.display = 'flex';
             if (newBlogBtn) newBlogBtn.style.display = 'none';
-        }
-
-        // Initial view
-        if (currentUser.user.role !== 'admin') {
-            switchTab('blogs');
-        } else {
-            switchTab('profiles');
+            if (switchView) switchTab('blogs'); // Normal users start on blogs
         }
     } else {
+        // Guest: show login button, hide user actions
         if (loginBtn) loginBtn.style.display = 'flex';
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
-        if (addProfileBtn) addProfileBtn.style.display = 'flex'; // Public visibility?
+        if (addProfileBtn) addProfileBtn.style.display = 'none';
         mainNavTabs.style.display = 'none';
-        switchTab('profiles'); // Default for guests
+        if (switchView) switchTab('blogs'); // Guests also see public blogs
     }
 }
 

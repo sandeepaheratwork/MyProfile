@@ -4,6 +4,10 @@ const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+// JWT Secret — falls back to a hard-coded dev value if not set
+const JWT_SECRET = process.env.JWT_SECRET || 'profile-manager-dev-secret-2024';
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
 const { z } = require('zod');
@@ -88,8 +92,18 @@ app.get('/mcp', (req, res) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Simple session store
-const sessions = new Map();
+// JWT helper functions (stateless – safe across Cloud Run restarts)
+function signToken(payload) {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+}
+
+function verifyToken(token) {
+    try {
+        return jwt.verify(token, JWT_SECRET);
+    } catch {
+        return null;
+    }
+}
 
 let db = null;
 
@@ -124,14 +138,26 @@ function hashPassword(password) {
 // Middleware
 const checkAdminRole = (req, res, next) => {
     const token = req.headers['x-auth-token'];
+    const payload = verifyToken(token);
 
-    // Verify token exists and is valid for an admin session
-    if (!token || !sessions.has(token) || sessions.get(token).role !== 'admin') {
+    if (!payload || payload.role.toLowerCase() !== 'admin') {
         return res.status(403).json({
             success: false,
             error: 'Access denied. Valid Admin session required.'
         });
     }
+    req.session = payload; // attach for downstream use
+    next();
+};
+
+// Middleware – any logged-in user
+const checkAuth = (req, res, next) => {
+    const token = req.headers['x-auth-token'];
+    const payload = verifyToken(token);
+    if (!payload) {
+        return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    req.session = payload;
     next();
 };
 
@@ -290,9 +316,8 @@ app.post('/api/login', async (req, res) => {
         // Get role (default to 'user' if not specified)
         const role = (profile.role || 'user').toLowerCase();
 
-        // Create session token
-        const token = crypto.randomBytes(16).toString('hex');
-        sessions.set(token, { userId: profile._id, role });
+        // Issue a stateless JWT — survives Cloud Run cold-starts
+        const token = signToken({ userId: profile._id.toString(), role });
 
         res.json({
             success: true,
@@ -338,9 +363,8 @@ app.post('/api/register', async (req, res) => {
 
         const result = await collection.insertOne(newUser);
 
-        // Auto-login after registration
-        const token = crypto.randomBytes(16).toString('hex');
-        sessions.set(token, { userId: result.insertedId, role: 'user' });
+        // Issue a stateless JWT
+        const token = signToken({ userId: result.insertedId.toString(), role: 'user' });
 
         res.status(201).json({
             success: true,
@@ -359,6 +383,7 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Admin Setup (Temporary endpoint to set password for existing user)
+// Also issues a fresh JWT so admin can login immediately
 app.post('/api/admin/setup', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -390,11 +415,10 @@ app.post('/api/admin/setup', async (req, res) => {
 app.post('/api/change-password', async (req, res) => {
     try {
         const token = req.headers['x-auth-token'];
-        if (!token || !sessions.has(token)) {
+        const session = verifyToken(token);
+        if (!session) {
             return res.status(403).json({ success: false, error: 'Access denied. Invalid session.' });
         }
-
-        const session = sessions.get(token);
         const { currentPassword, newPassword } = req.body;
 
         if (!currentPassword || !newPassword) {
@@ -431,14 +455,14 @@ app.post('/api/change-password', async (req, res) => {
     }
 });
 
-// Get all profiles (Admin only, or public list if allowed - restricting to Admin for now as per request)
+// Get all profiles (Admin only)
 app.get('/api/profiles', async (req, res) => {
     try {
         const token = req.headers['x-auth-token'];
-        const session = sessions.get(token);
+        const session = verifyToken(token);
 
         // If not admin, restrict visibility
-        if (!session || session.role !== 'admin') {
+        if (!session || session.role.toLowerCase() !== 'admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Access denied. Only Admins can view the user list.'
@@ -457,7 +481,7 @@ app.get('/api/profiles', async (req, res) => {
 app.get('/api/profiles/me', async (req, res) => {
     try {
         const token = req.headers['x-auth-token'];
-        const session = sessions.get(token);
+        const session = verifyToken(token);
 
         if (!session) {
             return res.status(401).json({ success: false, error: 'Not authenticated' });
@@ -568,8 +592,6 @@ app.get('/api/blogs/:id', async (req, res) => {
 app.post('/api/blogs', checkAdminRole, async (req, res) => {
     try {
         const { title, content, tags } = req.body;
-        const token = req.headers['x-auth-token'];
-        const session = sessions.get(token);
 
         if (!title || !content) {
             return res.status(400).json({ success: false, error: 'Title and content are required' });
@@ -580,7 +602,7 @@ app.post('/api/blogs', checkAdminRole, async (req, res) => {
             title,
             content,
             tags: tags || [],
-            author: { id: session.userId, name: 'Admin' }, // We could fetch name if needed
+            author: { id: req.session.userId, name: 'Admin' },
             createdAt: new Date(),
             updatedAt: new Date()
         };
