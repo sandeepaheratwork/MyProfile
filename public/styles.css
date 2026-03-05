@@ -1329,6 +1329,38 @@ body::before {
     height: 14px;
 }
 
+.blog-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    /* Remove padding since image will be full width */
+    overflow: hidden;
+}
+
+.blog-card-image {
+    width: 100%;
+    height: 180px;
+    overflow: hidden;
+}
+
+.blog-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-slow);
+}
+
+.blog-card:hover .blog-card-image img {
+    transform: scale(1.05);
+}
+
+.blog-card-content {
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
 .blog-card h3 {
     font-size: 1.25rem;
     font-weight: 700;

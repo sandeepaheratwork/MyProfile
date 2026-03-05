@@ -619,30 +619,50 @@ async function showBlogDetail(id) {
 function renderBlogs(blogs) {
     const isAdmin = currentUser && currentUser.user.role === 'admin';
     const blogsGrid = document.getElementById('blogsGrid');
-    blogsGrid.innerHTML = blogs.map(blog => `
-        <div class="blog-card" onclick="showBlogDetail('${blog._id}')" style="position: relative;">
-            ${isAdmin ? `
-            <button class="btn btn-danger btn-icon blog-delete-btn"
-                title="Delete post"
-                onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3,6 5,6 21,6"/>
-                    <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
-                </svg>
-            </button>` : ''}
-            <h3>${escapeHtml(blog.title)}</h3>
-            <div class="blog-meta">
-                <span>By ${escapeHtml(blog.author.name)}</span>
-                <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+
+    blogsGrid.innerHTML = blogs.map(blog => {
+        // Extract first image URL from markdown content: ![alt](url)
+        const imgMatch = blog.content.match(/!\[.*?\]\((.*?)\)/);
+        const imageUrl = imgMatch ? imgMatch[1] : null;
+
+        // Clean content for preview (remove markdown images and trim)
+        let cleanContent = blog.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150);
+        if (blog.content.length > 150) cleanContent += '...';
+
+        return `
+            <div class="blog-card" onclick="showBlogDetail('${blog._id}')" style="position: relative;">
+                ${isAdmin ? `
+                <button class="btn btn-danger btn-icon blog-delete-btn"
+                    title="Delete post"
+                    onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"/>
+                        <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                    </svg>
+                </button>` : ''}
+                
+                ${imageUrl ? `
+                <div class="blog-card-image">
+                    <img src="${imageUrl}" alt="${escapeHtml(blog.title)}">
+                </div>
+                ` : ''}
+                
+                <div class="blog-card-content">
+                    <h3>${escapeHtml(blog.title)}</h3>
+                    <div class="blog-meta">
+                        <span>By ${escapeHtml(blog.author.name)}</span>
+                        <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div class="blog-content-preview">
+                        ${escapeHtml(cleanContent)}
+                    </div>
+                    <div class="blog-tags">
+                        ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                </div>
             </div>
-            <div class="blog-content-preview">
-                ${escapeHtml(blog.content.substring(0, 150))}...
-            </div>
-            <div class="blog-tags">
-                ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function deleteBlogPost(id, btn) {
