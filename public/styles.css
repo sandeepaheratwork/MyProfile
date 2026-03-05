@@ -866,7 +866,7 @@ body::before {
     }
 
     .logo h1 {
-        display: none;
+        font-size: 1.1rem;
     }
 
     .btn span {
