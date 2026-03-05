@@ -652,9 +652,11 @@ function renderMyProfile(profile) {
 
 function handleLogout() {
     currentUser = null;
+    // Clear all possible session keys (belt-and-suspenders)
     localStorage.removeItem('adminSession');
-    updateUIForRole();
-    showToast('Logged out', 'info');
+    localStorage.removeItem('currentUser');
+    // Hard reload ensures no in-memory state lingers
+    window.location.reload();
 }
 
 // ========================================
@@ -696,6 +698,7 @@ async function loadProfiles(query = '') {
 
 // Clears a stale or invalid session (e.g. old token from before JWT migration)
 function handleUnauthorized() {
+    localStorage.removeItem('adminSession');
     localStorage.removeItem('currentUser');
     currentUser = null;
     updateUIForRole(true);
