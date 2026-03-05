@@ -83,6 +83,21 @@ function setupEventListeners() {
     document.getElementById('closeLoginModal').addEventListener('click', closeLoginModal);
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
+    document.getElementById('forgotPasswordForm').addEventListener('submit', handleForgotPassword);
+    document.getElementById('resetPasswordForm').addEventListener('submit', handleResetPassword);
+
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+    if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showForgotPasswordForm();
+    });
+
+    document.querySelectorAll('.back-to-login').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showLoginForm();
+        });
+    });
 
     loginModal.addEventListener('click', (e) => {
         if (e.target === loginModal) closeLoginModal();
@@ -213,12 +228,35 @@ function setupEventListeners() {
     }
 }
 
+function showForgotPasswordForm() {
+    document.getElementById('modalTitle').textContent = 'Forgot Password';
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('forgotPasswordForm').style.display = 'block';
+    document.getElementById('resetPasswordForm').style.display = 'none';
+    document.getElementById('forgotEmail').focus();
+}
+
+function showResetForm(email) {
+    document.getElementById('modalTitle').textContent = 'Reset Password';
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('forgotPasswordForm').style.display = 'none';
+    document.getElementById('resetPasswordForm').style.display = 'block';
+    document.getElementById('resetEmail').value = email;
+    document.getElementById('resetToken').focus();
+}
+
 function closeLoginModal() {
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('loginForm').reset();
     document.getElementById('registerForm').reset();
+    document.getElementById('forgotPasswordForm').reset();
+    document.getElementById('resetPasswordForm').reset();
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
+    document.getElementById('forgotError').style.display = 'none';
+    document.getElementById('resetError').style.display = 'none';
 }
 
 function showRegisterForm() {
@@ -502,6 +540,79 @@ function closeBlogModal() {
     document.getElementById('blogModal').classList.remove('active');
     document.getElementById('blogForm').reset();
     document.getElementById('submitBlogBtn').classList.remove('loading');
+}
+
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgotEmail').value.trim();
+    const errorEl = document.getElementById('forgotError');
+    const submitBtn = document.getElementById('submitForgotBtn');
+
+    submitBtn.classList.add('loading');
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Reset code generated (simulated)! Check your console/response.', 'info');
+            // In a real app, the user would check email. 
+            // Here, we'll help them by showing the form and they can "guess" the code or we show it.
+            console.log('RESET CODE:', data.token); // Helpful for the user in this demo
+            showResetForm(email);
+        } else {
+            errorEl.textContent = data.error || 'Failed to process request';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
+}
+
+async function handleResetPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('resetEmail').value;
+    const token = document.getElementById('resetToken').value.trim();
+    const newPassword = document.getElementById('resetNewPassword').value.trim();
+    const errorEl = document.getElementById('resetError');
+    const submitBtn = document.getElementById('submitResetBtn');
+
+    submitBtn.classList.add('loading');
+    errorEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, token, newPassword })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Password reset successfully! Please login.', 'success');
+            showLoginForm();
+        } else {
+            errorEl.textContent = data.error || 'Reset failed';
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Reset password error:', error);
+        errorEl.textContent = 'Connection error. Please try again.';
+        errorEl.style.display = 'block';
+    } finally {
+        submitBtn.classList.remove('loading');
+    }
 }
 
 async function handleBlogImageUpload(file) {

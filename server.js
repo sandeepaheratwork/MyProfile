@@ -644,6 +644,67 @@ app.delete('/api/blogs/:id', checkAdminRole, async (req, res) => {
     }
 });
 
+// Forgot Password
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const collection = await getProfilesCollection();
+
+        const user = await collection.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+        if (!user) {
+            // Treat user not found as success to avoid email enumeration in production
+            // but here we might want to be helpful for the demo
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        // Generate a simple 6-digit token (simulated)
+        const token = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = new Date(Date.now() + 3600000); // 1 hour expiry
+
+        await collection.updateOne(
+            { _id: user._id },
+            { $set: { resetToken: token, resetTokenExpiry: expiry } }
+        );
+
+        // In a real app, send email here. For now, return the token in the response
+        res.json({ success: true, message: 'Reset code generated', token });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Reset Password
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { email, token, newPassword } = req.body;
+        const collection = await getProfilesCollection();
+
+        const user = await collection.findOne({
+            email: { $regex: new RegExp(`^${email}$`, 'i') },
+            resetToken: token,
+            resetTokenExpiry: { $gt: new Date() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired reset code' });
+        }
+
+        await collection.updateOne(
+            { _id: user._id },
+            {
+                $set: { password: hashPassword(newPassword) },
+                $unset: { resetToken: "", resetTokenExpiry: "" }
+            }
+        );
+
+        res.json({ success: true, message: 'Password reset successfully' });
+
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Create profile
 app.post('/api/profiles', checkAdminRole, async (req, res) => {
     try {
