@@ -129,6 +129,14 @@ body::before {
     align-items: center;
     justify-content: center;
     box-shadow: var(--shadow-glow);
+    overflow: hidden;
+    /* Added to clip the image to border radius */
+}
+
+.logo-icon.profile-logo {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 50%;
 }
 
 .logo-icon svg {
