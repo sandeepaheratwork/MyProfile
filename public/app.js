@@ -153,9 +153,18 @@ function setupEventListeners() {
         imageInput.addEventListener('change', handleImageUpload);
     }
 
-    // Blog Buttons
+    // Blog Buttons — visible to everyone, but guests are prompted to register
     const newBlogBtn = document.getElementById('newBlogBtn');
     if (newBlogBtn) newBlogBtn.addEventListener('click', () => {
+        if (!currentUser) {
+            // Guest: open login modal on the Register tab with a hint
+            const loginModal = document.getElementById('loginModal');
+            const registerTab = document.getElementById('showRegisterTab');
+            if (loginModal) loginModal.classList.add('active');
+            if (registerTab) registerTab.click(); // switch to Register tab
+            showToast('Please register or log in to create a post.', 'error');
+            return;
+        }
         document.getElementById('blogModal').classList.add('active');
         document.getElementById('blogTitleInput').focus();
     });
@@ -393,16 +402,15 @@ function updateUIForRole(switchView = true) {
             if (addProfileBtn) addProfileBtn.style.display = 'flex';
             if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
             if (userProfileTab) userProfileTab.style.display = 'none';
-            if (newBlogBtn) newBlogBtn.style.display = 'flex';
-            if (switchView) switchTab('blogs'); // Admins also start on blogs
         } else {
             if (adminBadge) adminBadge.style.display = 'none';
             if (addProfileBtn) addProfileBtn.style.display = 'none';
             if (adminProfilesTab) adminProfilesTab.style.display = 'none';
             if (userProfileTab) userProfileTab.style.display = 'flex';
-            if (newBlogBtn) newBlogBtn.style.display = 'none';
-            if (switchView) switchTab('blogs'); // Normal users start on blogs
         }
+        // All logged-in users can create posts
+        if (newBlogBtn) newBlogBtn.style.display = 'flex';
+        if (switchView) switchTab('blogs');
     } else {
         // Guest: show login button, hide user actions
         if (loginBtn) loginBtn.style.display = 'flex';
@@ -411,7 +419,9 @@ function updateUIForRole(switchView = true) {
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
         if (addProfileBtn) addProfileBtn.style.display = 'none';
         mainNavTabs.style.display = 'none';
-        if (switchView) switchTab('blogs'); // Guests also see public blogs
+        // Guests can see blogs and are shown New Post to encourage registration
+        if (newBlogBtn) newBlogBtn.style.display = 'flex';
+        if (switchView) switchTab('blogs');
     }
 }
 

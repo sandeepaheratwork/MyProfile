@@ -588,8 +588,8 @@ app.get('/api/blogs/:id', async (req, res) => {
     }
 });
 
-// Create blog (Admin only)
-app.post('/api/blogs', checkAdminRole, async (req, res) => {
+// Create blog (any logged-in user)
+app.post('/api/blogs', checkAuth, async (req, res) => {
     try {
         const { title, content, tags } = req.body;
 
@@ -597,12 +597,23 @@ app.post('/api/blogs', checkAdminRole, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Title and content are required' });
         }
 
+        // Fetch the author's real name from their profile
+        const profilesCollection = await getProfilesCollection();
+        let authorName = 'Anonymous';
+        try {
+            const authorProfile = await profilesCollection.findOne(
+                { _id: new ObjectId(req.session.userId) },
+                { projection: { name: 1 } }
+            );
+            if (authorProfile) authorName = authorProfile.name;
+        } catch (_) { /* userId may not be a valid ObjectId on some edge case */ }
+
         const collection = await getBlogsCollection();
         const blog = {
             title,
             content,
             tags: tags || [],
-            author: { id: req.session.userId, name: 'Admin' },
+            author: { id: req.session.userId, name: authorName },
             createdAt: new Date(),
             updatedAt: new Date()
         };
