@@ -1265,6 +1265,32 @@ body::before {
     opacity: 1;
 }
 
+/* Admin delete button on blog cards */
+.blog-delete-btn {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    opacity: 0;
+    transition: opacity var(--transition-base), transform var(--transition-base);
+    z-index: 2;
+}
+
+.blog-card:hover .blog-delete-btn {
+    opacity: 1;
+}
+
+.blog-delete-btn:hover {
+    transform: scale(1.1);
+}
+
+.blog-delete-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
 .blog-card h3 {
     font-size: 1.25rem;
     font-weight: 700;

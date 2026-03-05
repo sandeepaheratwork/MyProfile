@@ -517,9 +517,19 @@ async function showBlogDetail(id) {
 }
 
 function renderBlogs(blogs) {
+    const isAdmin = currentUser && currentUser.user.role === 'admin';
     const blogsGrid = document.getElementById('blogsGrid');
     blogsGrid.innerHTML = blogs.map(blog => `
-        <div class="blog-card" onclick="showBlogDetail('${blog._id}')">
+        <div class="blog-card" onclick="showBlogDetail('${blog._id}')" style="position: relative;">
+            ${isAdmin ? `
+            <button class="btn btn-danger btn-icon blog-delete-btn"
+                title="Delete post"
+                onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3,6 5,6 21,6"/>
+                    <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                </svg>
+            </button>` : ''}
             <h3>${escapeHtml(blog.title)}</h3>
             <div class="blog-meta">
                 <span>By ${escapeHtml(blog.author.name)}</span>
@@ -533,6 +543,35 @@ function renderBlogs(blogs) {
             </div>
         </div>
     `).join('');
+}
+
+async function deleteBlogPost(id, btn) {
+    if (!confirm('Delete this blog post? This cannot be undone.')) return;
+
+    btn.disabled = true;
+    btn.classList.add('loading');
+
+    try {
+        const response = await fetch(`/api/blogs/${id}`, {
+            method: 'DELETE',
+            headers: { 'x-auth-token': currentUser ? currentUser.token : '' }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Blog post deleted.', 'success');
+            loadBlogs();
+        } else {
+            showToast(data.error || 'Failed to delete post', 'error');
+            btn.disabled = false;
+            btn.classList.remove('loading');
+        }
+    } catch (error) {
+        console.error('Error deleting blog:', error);
+        showToast('Connection error. Please try again.', 'error');
+        btn.disabled = false;
+        btn.classList.remove('loading');
+    }
 }
 
 async function loadMyProfile() {
