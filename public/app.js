@@ -712,16 +712,15 @@ async function handleBlogImageUpload(file) {
         return;
     }
 
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit for base64
-        showToast('Image is too large. Max 2MB.', 'error');
+    if (file.size > 5 * 1024 * 1024) { // Increased to 5MB for server storage
+        showToast('Image is too large. Max 5MB.', 'error');
         return;
     }
 
     const blogContentInput = document.getElementById('blogContentInput');
-    const submitBtn = document.getElementById('submitBlogBtn');
 
     // Add a placeholder while processing
-    const placeholder = `\n![Uploading ${file.name}...]()\n`;
+    const placeholder = `\n![Processing ${file.name}...]()\n`;
     const cursorFallback = blogContentInput.value.length;
     const start = blogContentInput.selectionStart ?? cursorFallback;
     const end = blogContentInput.selectionEnd ?? cursorFallback;
@@ -729,17 +728,38 @@ async function handleBlogImageUpload(file) {
 
     try {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             const base64 = e.target.result;
-            const markdownImage = `\n![${file.name}](${base64})\n`;
-            blogContentInput.value = blogContentInput.value.replace(placeholder, markdownImage);
-            blogContentInput.dispatchEvent(new Event('input')); // Trigger resize if any
+
+            // Upload to backend
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': currentUser ? currentUser.token : ''
+                },
+                body: JSON.stringify({
+                    image: base64,
+                    name: file.name,
+                    type: file.type
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                const markdownImage = `\n![${file.name}](${data.url})\n`;
+                blogContentInput.value = blogContentInput.value.replace(placeholder, markdownImage);
+                blogContentInput.dispatchEvent(new Event('input'));
+            } else {
+                throw new Error(data.error);
+            }
         };
         reader.readAsDataURL(file);
     } catch (error) {
-        console.error('Error processing image:', error);
+        console.error('Error uploading image:', error);
         blogContentInput.value = blogContentInput.value.replace(placeholder, '');
-        showToast('Failed to process image.', 'error');
+        showToast('Failed to upload image: ' + error.message, 'error');
     }
 }
 

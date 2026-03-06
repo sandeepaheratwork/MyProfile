@@ -689,11 +689,73 @@ app.get('/api/profiles/:id', async (req, res) => {
 // ==========================================
 
 const BLOG_COLLECTION = 'blogs';
+const IMAGE_COLLECTION = 'images';
 
 async function getBlogsCollection() {
     const database = await connectToMongoDB();
     return database.collection(BLOG_COLLECTION);
 }
+
+async function getImagesCollection() {
+    const database = await connectToMongoDB();
+    return database.collection(IMAGE_COLLECTION);
+}
+
+// ==========================================
+// Image Storage API
+// ==========================================
+
+// Upload image (base64)
+app.post('/api/upload', checkAuth, async (req, res) => {
+    try {
+        const { image, name, type } = req.body;
+
+        if (!image) {
+            return res.status(400).json({ success: false, error: 'No image data provided' });
+        }
+
+        // Clean base64 string (remove data:image/png;base64, prefix)
+        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        const collection = await getImagesCollection();
+        const imageDoc = {
+            name: name || 'upload',
+            contentType: type || 'image/png',
+            data: buffer,
+            userId: req.session.userId,
+            createdAt: new Date()
+        };
+
+        const result = await collection.insertOne(imageDoc);
+        res.status(201).json({
+            success: true,
+            id: result.insertedId,
+            url: `/api/images/${result.insertedId}`
+        });
+    } catch (error) {
+        console.error('Upload error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Serve image
+app.get('/api/images/:id', async (req, res) => {
+    try {
+        const collection = await getImagesCollection();
+        const image = await collection.findOne({ _id: new ObjectId(req.params.id) });
+
+        if (!image) {
+            return res.status(404).send('Image not found');
+        }
+
+        res.set('Content-Type', image.contentType);
+        res.set('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+        res.send(image.data.buffer);
+    } catch (error) {
+        res.status(500).send('Error retrieving image');
+    }
+});
 
 // List all blogs
 app.get('/api/blogs', async (req, res) => {
