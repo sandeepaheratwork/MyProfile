@@ -341,6 +341,87 @@ function createMcpServer() {
             }
         }
     );
+    // Tool: List Profiles
+    server.tool(
+        "list_profiles",
+        "List high-level details of all user profiles",
+        {},
+        async () => {
+            try {
+                const collection = await getProfilesCollection();
+                const profiles = await collection.find({}).sort({ createdAt: -1 }).limit(20).toArray();
+                return {
+                    content: [{ type: "text", text: JSON.stringify(profiles, null, 2) }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error listing profiles: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Tool: Delete Profile
+    server.tool(
+        "delete_profile",
+        "Delete a user profile by email or name",
+        {
+            identifier: z.string().describe("The email address or full name of the profile to delete")
+        },
+        async ({ identifier }) => {
+            try {
+                const collection = await getProfilesCollection();
+                const result = await collection.deleteOne({
+                    $or: [
+                        { email: identifier },
+                        { name: identifier }
+                    ]
+                });
+
+                if (result.deletedCount === 0) {
+                    return { content: [{ type: "text", text: `No profile found matching "${identifier}"` }], isError: true };
+                }
+
+                return {
+                    content: [{ type: "text", text: `Successfully deleted profile: ${identifier}` }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error deleting profile: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
+
+    // Tool: Delete Blog Post
+    server.tool(
+        "delete_blog_post",
+        "Delete a technical blog post by its exact title",
+        {
+            title: z.string().describe("The exact title of the blog post to delete")
+        },
+        async ({ title }) => {
+            try {
+                const collection = await getBlogsCollection();
+                const result = await collection.deleteOne({ title: title });
+
+                if (result.deletedCount === 0) {
+                    return { content: [{ type: "text", text: `No blog post found with title "${title}"` }], isError: true };
+                }
+
+                return {
+                    content: [{ type: "text", text: `Successfully deleted blog post: ${title}` }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error deleting blog post: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
 
     return server;
 }
@@ -879,7 +960,7 @@ app.delete('/api/profiles/:id', checkAdminRole, async (req, res) => {
 // AI Chat Endpoint
 // ========================================
 
-const SYSTEM_PROMPT = `You are a helpful assistant for a Profile Management system. You help users create, search, and update profiles using natural language.
+const SYSTEM_PROMPT = `You are a helpful assistant for a Profile Management system. You help users create, search, update, and delete profiles and blogs using natural language.
 
 IMPORTANT: You must respond with valid JSON only. No markdown, no explanation, just pure JSON.
 
@@ -887,25 +968,29 @@ Based on the user's message, determine the intent and extract relevant informati
 
 Respond with a JSON object in this exact format:
 {
-  "intent": "create" | "search" | "update" | "list" | "help" | "unknown",
+  "intent": "create" | "search" | "update" | "list" | "delete" | "create_blog" | "search_blogs" | "list_blogs" | "delete_blog" | "help" | "unknown",
   "entities": {
     "name": "string or null",
     "email": "string or null",
     "role": "string or null",
     "bio": "string or null",
-    "searchQuery": "string or null"
+    "searchQuery": "string or null",
+    "blogTitle": "string or null",
+    "blogContent": "string or null",
+    "tags": "array or null"
   },
   "response": "A friendly response to show the user"
 }
 
 Examples:
-- "Create a profile for John Smith, email john@example.com, Software Engineer" -> intent: "create", entities: {name: "John Smith", email: "john@example.com", role: "Software Engineer"}
-- "Find all engineers" -> intent: "search", entities: {searchQuery: "engineers"}
-- "Update John's role to Senior Engineer" -> intent: "update", entities: {name: "John", role: "Senior Engineer"}
-- "Show all profiles" or "list everyone" -> intent: "list"
-- "Hello" or "How does this work?" -> intent: "help"
+- "Create a profile for John Smith" -> intent: "create", entities: {name: "John Smith"}
+- "Delete the profile for jane@example.com" -> intent: "delete", entities: {email: "jane@example.com"}
+- "Search for blogs about React" -> intent: "search_blogs", entities: {searchQuery: "React"}
+- "Delete the blog titled 'AI Tips'" -> intent: "delete_blog", entities: {blogTitle: "AI Tips"}
+- "Show all profiles" -> intent: "list"
+- "Post a blog about Node.js" -> intent: "create_blog", entities: {blogTitle: "Node.js", blogContent: "..."}
+- "Hello" -> intent: "help"
 
-For updates, try to identify the person by name, then what field to update.
 Always provide a friendly, conversational response in the "response" field.`;
 
 app.post('/api/chat', async (req, res) => {
@@ -957,7 +1042,7 @@ app.post('/api/chat', async (req, res) => {
                 The user wants to interact with blogs.
                 Message: "${message}"
                 Extract: blogTitle, blogContent, tags (as array), searchQuery.
-                And determine intent: "create_blog", "list_blogs", or "search_blogs".
+                And determine intent: "create_blog", "list_blogs", "search_blogs", or "delete_blog".
                 Return JSON only: { "intent": "string", "entities": { "blogTitle": "string or null", "blogContent": "string or null", "tags": "array or null", "searchQuery": "string or null" } }
             `;
                 const result = await model.generateContent(prompt);
@@ -967,7 +1052,7 @@ app.post('/api/chat', async (req, res) => {
             } else {
                 const prompt = `
                 Extract profile management intent from this message: "${message}"
-                Possible intents: "create", "search", "update", "list", "help".
+                Possible intents: "create", "search", "update", "list", "delete", "help".
                 Return JSON only: { "intent": "string", "entities": { "name": "string or null", "email": "string or null", "role": "string or null", "bio": "string or null", "searchQuery": "string or null" } }
             `;
                 const result = await model.generateContent(prompt);
@@ -1078,6 +1163,38 @@ app.post('/api/chat', async (req, res) => {
                                 message: `I couldn't find a profile matching "${entities.name}".`
                             };
                         }
+                    }
+                    break;
+
+                case 'delete':
+                    if (entities.email || entities.name) {
+                        const filter = entities.email ? { email: entities.email } : { name: new RegExp(entities.name, 'i') };
+                        const deleteResult = await collection.deleteOne(filter);
+                        if (deleteResult.deletedCount > 0) {
+                            actionResult = { type: 'deleted', count: 1 };
+                            response = `I've successfully deleted the profile for "${entities.email || entities.name}".`;
+                        } else {
+                            response = `I couldn't find a profile to delete matching "${entities.email || entities.name}".`;
+                            actionResult = { type: 'not_found' };
+                        }
+                    } else {
+                        response = "Who are we deleting today? Please provide a name or email.";
+                    }
+                    break;
+
+                case 'delete_blog':
+                    if (entities.blogTitle) {
+                        const blogsColl = await getBlogsCollection();
+                        const deleteBlogResult = await blogsColl.deleteOne({ title: new RegExp(entities.blogTitle, 'i') });
+                        if (deleteBlogResult.deletedCount > 0) {
+                            actionResult = { type: 'blog_deleted', count: 1 };
+                            response = `I've successfully removed the blog post: "${entities.blogTitle}".`;
+                        } else {
+                            response = `I couldn't find a blog with the title "${entities.blogTitle}".`;
+                            actionResult = { type: 'not_found' };
+                        }
+                    } else {
+                        response = "Which blog would you like me to delete? Just give me the title.";
                     }
                     break;
 

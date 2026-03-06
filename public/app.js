@@ -1604,9 +1604,9 @@ async function handleChatSubmit(e) {
 
             // Refresh data if actions occurred
             if (data.action) {
-                if (['created', 'updated', 'search', 'list'].includes(data.action.type)) {
+                if (['created', 'updated', 'search', 'list', 'deleted'].includes(data.action.type)) {
                     loadProfiles(searchInput.value);
-                } else if (['blog_created', 'blog_list'].includes(data.action.type)) {
+                } else if (['blog_created', 'blog_list', 'blog_deleted'].includes(data.action.type)) {
                     loadBlogs();
                 }
             }
