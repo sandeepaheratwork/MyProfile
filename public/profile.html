@@ -151,6 +151,75 @@
             padding: var(--spacing-2xl);
             display: none;
         }
+
+        /* Mobile Responsiveness Refinement */
+        @media (max-width: 640px) {
+            .portfolio-header {
+                flex-direction: column;
+                text-align: center;
+                padding: var(--spacing-xl) var(--spacing-lg);
+                gap: var(--spacing-md);
+            }
+
+            .portfolio-avatar {
+                width: 90px;
+                height: 90px;
+                margin-top: -10px;
+            }
+
+            .portfolio-info h1 {
+                font-size: 1.75rem;
+                line-height: 1.2;
+            }
+
+            .portfolio-role {
+                margin-bottom: var(--spacing-sm);
+            }
+
+            .portfolio-contact {
+                justify-content: center;
+                font-size: 0.9375rem;
+                flex-wrap: wrap;
+            }
+
+            .portfolio-actions {
+                width: 100%;
+                margin-top: var(--spacing-sm);
+            }
+
+            .portfolio-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .content-section h2 {
+                font-size: 1.25rem;
+                margin-bottom: var(--spacing-md);
+            }
+
+            .bio-text {
+                font-size: 1rem;
+                padding: var(--spacing-md);
+                line-height: 1.7;
+            }
+
+            .portfolio-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-md);
+            }
+
+            .portfolio-item {
+                padding: var(--spacing-md);
+            }
+        }
+
+        /* Prevent potential horizontal overflow */
+        html,
+        body {
+            overflow-x: hidden;
+            width: 100%;
+            position: relative;
+        }
     </style>
 </head>
 
