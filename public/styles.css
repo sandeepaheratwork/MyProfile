@@ -1505,9 +1505,140 @@ body::before {
 .markdown-body blockquote {
     border-left: 4px solid var(--color-accent-primary);
     padding-left: 1.5rem;
-    margin: 1.5rem 0;
+}
+
+/* My Profile Premium UI */
+.profile-detail-view {
+    position: relative;
+    overflow: hidden;
+    padding: 0 !important;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 700px !important;
+    margin: 0 auto;
+}
+
+.profile-banner {
+    height: 120px;
+    background: var(--color-accent-gradient);
+    opacity: 0.8;
+}
+
+.profile-detail-content {
+    padding: var(--spacing-xl);
+    text-align: center;
+    position: relative;
+    margin-top: -60px;
+}
+
+.profile-image-container.large {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto var(--spacing-lg);
+    border: 6px solid var(--color-bg-card);
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--color-bg-tertiary);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-image-container.large img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-initials.xl {
+    font-size: 3rem;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-accent-gradient);
+    color: white;
+}
+
+.profile-detail-view h3 {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-xs);
+    color: var(--color-text-primary);
+}
+
+.profile-detail-view .role-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--color-accent-primary);
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-xl);
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+    margin: var(--spacing-xl) 0;
+    padding: var(--spacing-lg) 0;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.stat-label {
+    font-size: 0.75rem;
     color: var(--color-text-muted);
-    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.profile-info-grid {
+    text-align: left;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.info-group h4 {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-xs);
+    text-transform: uppercase;
+}
+
+.info-group p {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.my-profile-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+}
+
+.my-profile-section {
+    padding: var(--spacing-xl) 0;
+    animation: fadeInUp 0.5s ease;
 }
 
 /* Skeleton Loading Animation */

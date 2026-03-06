@@ -35,6 +35,7 @@ const toastContainer = document.getElementById('toastContainer');
 
 // State
 let profiles = [];
+let blogs = []; // Store blogs globally for count
 let searchDebounceTimer = null;
 let currentUser = null; // Stores { token, user }
 
@@ -593,6 +594,7 @@ async function loadBlogs() {
         const data = await response.json();
 
         if (data.success) {
+            blogs = data.blogs; // Store it
             if (data.blogs.length === 0) {
                 emptyState.style.display = 'block';
             } else {
@@ -929,38 +931,66 @@ async function loadMyProfile() {
 
 function renderMyProfile(profile) {
     const content = document.getElementById('myProfileContent');
+    const userBlogs = blogs.filter(b => b.author && b.author.id === profile._id);
+    const joinDate = new Date(profile.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     content.innerHTML = `
-        <div class="profile-card profile-detail-view" style="max-width: 600px; margin: 0 auto;">
-            <div class="profile-header">
-                <div class="profile-image-container">
+        <div class="profile-detail-view">
+            <div class="profile-banner"></div>
+            <div class="profile-detail-content">
+                <div class="profile-image-container large">
                     ${profile.imageUrl
-            ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}" class="profile-image">`
-            : `<div class="profile-initials large">${profile.name[0]}</div>`
+            ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+            : `<div class="profile-initials xl">${profile.name[0]}</div>`
         }
                 </div>
-                <div class="profile-title">
-                    <h3>${escapeHtml(profile.name)}</h3>
-                    <p class="role">${escapeHtml(profile.role || 'Professional')}</p>
-                </div>
-                <button class="btn btn-secondary btn-sm" onclick="openModal(${JSON.stringify(profile).replace(/"/g, '&quot;')})">
-                    Edit Profile
-                </button>
-            </div>
-            <div class="profile-body">
-                <div class="info-item">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                        <polyline points="22,6 12,13 2,6" />
-                    </svg>
-                    <span>${escapeHtml(profile.email)}</span>
-                </div>
-                ${profile.bio ? `
-                    <div class="profile-bio">
-                        <h4>About</h4>
-                        <p>${escapeHtml(profile.bio)}</p>
+                
+                <h3>${escapeHtml(profile.name)}</h3>
+                <span class="role-badge">${escapeHtml(profile.role || 'Professional')}</span>
+                
+                <div class="profile-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">${userBlogs.length}</span>
+                        <span class="stat-label">Posts</span>
                     </div>
-                ` : ''}
+                    <div class="stat-item">
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Likes</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${joinDate}</span>
+                        <span class="stat-label">Joined</span>
+                    </div>
+                </div>
+
+                <div class="profile-info-grid">
+                    <div class="info-group">
+                        <h4>Contact Information</h4>
+                        <p>${escapeHtml(profile.email)}</p>
+                    </div>
+                    ${profile.bio ? `
+                        <div class="info-group">
+                            <h4>Professional Bio</h4>
+                            <p>${escapeHtml(profile.bio)}</p>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <div class="my-profile-actions">
+                    <button class="btn btn-primary" onclick="document.getElementById('newBlogBtn').click()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                        New Post
+                    </button>
+                    <button class="btn btn-secondary" onclick="openModal(${JSON.stringify(profile).replace(/"/g, '&quot;')})">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        Edit Profile
+                    </button>
+                </div>
             </div>
         </div>
     `;
