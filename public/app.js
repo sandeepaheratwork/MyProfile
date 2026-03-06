@@ -205,6 +205,19 @@ function setupEventListeners() {
         blogImageInput.addEventListener('change', (e) => handleBlogImageUpload(e.target.files[0]));
     }
 
+    const blogInsertSandboxBtn = document.getElementById('blogInsertSandboxBtn');
+    if (blogInsertSandboxBtn && blogContentInput) {
+        blogInsertSandboxBtn.addEventListener('click', () => {
+            const sandboxId = prompt("Enter CodeSandbox ID (e.g., 'new' or a specific ID like 'react-new'):", "react-new");
+            if (sandboxId) {
+                const cursorPos = blogContentInput.selectionStart;
+                const text = blogContentInput.value;
+                const embedCode = `\n\n[sandbox:${sandboxId}]\n\n`;
+                blogContentInput.value = text.substring(0, cursorPos) + embedCode + text.substring(cursorPos);
+            }
+        });
+    }
+
     if (blogContentInput) {
         // Drag and Drop
         blogContentInput.addEventListener('dragover', (e) => {
@@ -779,8 +792,23 @@ async function showBlogDetail(id, pushState = true) {
             const blog = data.blog;
 
             // Use marked to parse markdown content safely
-            // We still want to be careful with HTML injection, but marked handles most things
-            const renderedContent = typeof marked !== 'undefined' ? marked.parse(blog.content) : escapeHtml(blog.content).replace(/\n/g, '<br>');
+            let content = blog.content;
+
+            // Transform [sandbox:id] into iframe
+            content = content.replace(/\[sandbox:(.*?)\]/g, (match, id) => {
+                return `
+                <div class="sandbox-wrapper" style="margin: 1.5rem 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border); height: 500px;">
+                    <iframe src="https://codesandbox.io/embed/${id}?fontsize=14&hidenavigation=1&theme=dark"
+                        style="width:100%; height:500px; border:0; border-radius: 4px; overflow:hidden;"
+                        title="CodeSandbox Embed"
+                        allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+                        sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+                    ></iframe>
+                </div>`;
+            });
+
+            // Use marked to parse markdown content safely
+            const renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
 
             const detailHtml = `
                 <div class="blog-detail">
