@@ -1275,17 +1275,22 @@ app.post('/api/chat', async (req, res) => {
                     break;
 
                 case 'help':
+                    let helpMsg = 'I can help you manage technical blogs. Try saying things like:\n\n' +
+                        '**Technical Blogs:**\n' +
+                        '• "Show me recent blogs"\n' +
+                        '• "Search for blogs about React"\n' +
+                        '• "Post a blog titled \'AI Tips\' with content \'Use MCP for scale\'"';
+
+                    if (isAdmin) {
+                        helpMsg += '\n\n**Admin Controls (Profiles):**\n' +
+                            '• "Create a profile for Jane Doe"\n' +
+                            '• "Find all engineers"\n' +
+                            '• "Delete the profile for user@email.com"';
+                    }
+
                     actionResult = {
                         type: 'help',
-                        message: 'I can help you manage profiles and technical blogs. Try saying things like:\n\n' +
-                            '**Profiles:**\n' +
-                            '• "Create a profile for Jane Doe, jane@company.com"\n' +
-                            '• "Find all engineers"\n' +
-                            '• "Show all profiles"\n\n' +
-                            '**Technical Blogs:**\n' +
-                            '• "Show me recent blogs"\n' +
-                            '• "Search for blogs about React"\n' +
-                            '• "Post a blog titled \'AI Tips\' with content \'Use MCP for scale\'"'
+                        message: helpMsg
                     };
                     break;
             }
