@@ -789,12 +789,21 @@ body::before {
 .modal {
     width: 100%;
     max-width: 480px;
+    max-height: 90vh;
+    /* Prevents modal from going off-screen */
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
     transform: scale(0.95) translateY(20px);
     transition: transform var(--transition-base);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.modal-lg {
+    max-width: 800px;
 }
 
 .modal-overlay.active .modal {
@@ -807,6 +816,8 @@ body::before {
     align-items: center;
     padding: var(--spacing-lg) var(--spacing-xl);
     border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    /* Header stays at the top */
 }
 
 .modal-header h2 {
@@ -840,6 +851,15 @@ body::before {
 
 .modal-form {
     padding: var(--spacing-xl);
+    overflow-y: auto;
+    /* Enable internal scrolling */
+    flex: 1;
+}
+
+@media (max-width: 768px) {
+    .modal-form {
+        padding: var(--spacing-lg);
+    }
 }
 
 .modal-body {
@@ -1107,6 +1127,12 @@ body {
     .modal {
         max-width: calc(100% - 2rem);
         margin: 1rem;
+        max-height: calc(100vh - 2rem);
+    }
+
+    #blogContentInput {
+        height: 200px !important;
+        /* Smaller height on mobile to save space */
     }
 }
 
