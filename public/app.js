@@ -1584,7 +1584,10 @@ async function handleChatSubmit(e) {
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': localStorage.getItem('token')
+            },
             body: JSON.stringify({ message })
         });
 

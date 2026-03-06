@@ -996,6 +996,10 @@ Always provide a friendly, conversational response in the "response" field.`;
 app.post('/api/chat', async (req, res) => {
     try {
         const { message } = req.body;
+        const token = req.headers['x-auth-token'];
+        const user = verifyToken(token); // Get user role and data if logged in
+        const isAdmin = user && user.role && user.role.toLowerCase() === 'admin';
+        const isUser = user && user.role; // Registered users (includes admins)
 
         if (!message || !message.trim()) {
             return res.status(400).json({
@@ -1009,6 +1013,30 @@ app.post('/api/chat', async (req, res) => {
                 success: false,
                 error: 'AI chat is not available. Please set GEMINI_API_KEY environment variable.',
                 response: 'I apologize, but AI chat is not configured. Please use the form interface to manage profiles.'
+            });
+        }
+
+        // Determine general intent category before sending to AI
+        const messageLower = message.toLowerCase();
+        const isBlogTopic = messageLower.includes('blog') || messageLower.includes('post') || messageLower.includes('technical');
+
+        // 1. Check permissions for Profiles (Admin Only)
+        if (!isBlogTopic && !isAdmin && !messageLower.includes('help') && !messageLower.includes('hello')) {
+            return res.json({
+                success: true,
+                intent: 'denied',
+                response: "I'm sorry, but profile management via AI assistant is restricted to administrators. Registered users can however manage technical blogs!",
+                action: { type: 'error', message: 'Admin access required for profile tools' }
+            });
+        }
+
+        // 2. Check permissions for Blogs (Registered Users)
+        if (isBlogTopic && !isUser) {
+            return res.json({
+                success: true,
+                intent: 'denied',
+                response: "I'd love to help you with technical blogs, but you'll need to login first to post or browse full details!",
+                action: { type: 'error', message: 'Authentication required for blog tools' }
             });
         }
 
