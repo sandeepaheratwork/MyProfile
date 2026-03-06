@@ -860,6 +860,12 @@ body::before {
    Responsive Design
    ======================================== */
 
+html,
+body {
+    overflow-x: hidden;
+    width: 100%;
+}
+
 @media (max-width: 768px) {
     .header-content {
         padding: var(--spacing-md);
@@ -876,10 +882,32 @@ body::before {
 
     .main-content {
         padding: var(--spacing-md);
+        width: 100%;
+        overflow-x: hidden;
     }
 
     .search-shortcut {
         display: none;
+    }
+
+    .nav-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--spacing-xs);
+        scrollbar-width: none;
+        /* Hide scrollbar Firefox */
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+        display: none;
+        /* Hide scrollbar Chrome/Safari */
+    }
+
+    .nav-tab {
+        flex: 0 0 auto;
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.875rem;
     }
 
     .profiles-grid {
@@ -890,9 +918,20 @@ body::before {
         opacity: 1;
     }
 
+    .profile-stats {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md) 0;
+    }
+
+    .stat-item {
+        align-items: center;
+        text-align: center;
+    }
+
     .modal {
-        max-width: 100%;
-        margin: var(--spacing-md);
+        max-width: calc(100% - 2rem);
+        margin: 1rem;
     }
 }
 
