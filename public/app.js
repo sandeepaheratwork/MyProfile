@@ -1581,12 +1581,16 @@ async function handleChatSubmit(e) {
     chatSend.disabled = true;
     const typingEl = showTypingIndicator();
 
+    // Get token from adminSession
+    const sessionData = localStorage.getItem('adminSession');
+    const token = sessionData ? JSON.parse(sessionData).token : null;
+
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-auth-token': localStorage.getItem('token')
+                'x-auth-token': token
             },
             body: JSON.stringify({ message })
         });
