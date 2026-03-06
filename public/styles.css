@@ -863,13 +863,14 @@ body::before {
 @media (max-width: 768px) {
     .header-content {
         padding: var(--spacing-md);
+        gap: var(--spacing-sm);
     }
 
     .logo h1 {
         font-size: 1.1rem;
     }
 
-    .btn span {
+    .header-content .btn span {
         display: none;
     }
 
