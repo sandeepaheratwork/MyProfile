@@ -1175,11 +1175,23 @@ function openModal(profile = null) {
         bioInput.value = profile.bio || '';
 
         // Handle Image Preview
-        if (profile.imageUrl) {
-            imagePreview.innerHTML = `<img src="${profile.imageUrl}" alt="Preview">`;
-            imageUrlInput.value = profile.imageUrl;
-        } else {
+        imageUrlInput.value = profile.imageUrl || '';
+        imagePreview.innerHTML = profile.imageUrl ? `<img src="${profile.imageUrl}" alt="Preview">` : '';
+        if (!profile.imageUrl) {
             resetImagePreview();
+        }
+
+        // Security: Only admins can change roles or emails
+        const isAdmin = currentUser && currentUser.user.role === 'admin';
+        emailInput.disabled = !isAdmin;
+        roleInput.disabled = !isAdmin;
+
+        // Add visual hint for disabled fields
+        if (emailInput && roleInput) {
+            emailInput.style.opacity = isAdmin ? '1' : '0.6';
+            roleInput.style.opacity = isAdmin ? '1' : '0.6';
+            emailInput.title = isAdmin ? '' : 'Only administrators can change email addresses';
+            roleInput.title = isAdmin ? '' : 'Only administrators can change job titles';
         }
     } else {
         // Create mode
@@ -1189,6 +1201,12 @@ function openModal(profile = null) {
         profileForm.reset();
         profileIdInput.value = '';
         resetImagePreview();
+
+        // Enable for new profiles
+        emailInput.disabled = false;
+        roleInput.disabled = false;
+        emailInput.style.opacity = '1';
+        roleInput.style.opacity = '1';
     }
 
     profileModal.classList.add('active');
@@ -1260,6 +1278,17 @@ async function handleFormSubmit(e) {
             );
             closeModal();
             loadProfiles(searchInput.value);
+
+            // If the user updated their own profile, refresh "My Profile" tab and header
+            if (isEdit && currentUser && profileIdInput.value === currentUser.user._id) {
+                // Update local session data with new info
+                currentUser.user = { ...currentUser.user, ...profileData };
+                localStorage.setItem('adminSession', JSON.stringify(currentUser));
+
+                // Refresh UI components
+                loadMyProfile();
+                updateUIForRole(false);
+            }
         } else {
             showToast(result.error || 'An error occurred', 'error');
         }

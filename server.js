@@ -161,6 +161,27 @@ const checkAuth = (req, res, next) => {
     next();
 };
 
+// Middleware – Admin or the profile owner
+const checkAdminOrOwner = (req, res, next) => {
+    const token = req.headers['x-auth-token'];
+    const payload = verifyToken(token);
+    if (!payload) {
+        return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+    const { id } = req.params;
+    const isAdmin = payload.role.toLowerCase() === 'admin';
+    const isOwner = payload.userId === id;
+
+    if (!isAdmin && !isOwner) {
+        return res.status(403).json({
+            success: false,
+            error: 'Access denied. You can only update your own profile.'
+        });
+    }
+    req.session = payload;
+    next();
+};
+
 // ==========================================
 // MCP Cloud Server Implementation
 // ==========================================
@@ -742,23 +763,29 @@ app.post('/api/profiles', checkAdminRole, async (req, res) => {
 });
 
 // Update profile
-app.put('/api/profiles/:id', checkAdminRole, async (req, res) => {
+app.put('/api/profiles/:id', checkAdminOrOwner, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, email, role, bio, imageUrl } = req.body;
+        const isAdmin = req.session.role.toLowerCase() === 'admin';
 
         const updates = {};
         if (name !== undefined) updates.name = name;
-        if (email !== undefined) updates.email = email;
-        if (role !== undefined) updates.role = role;
         if (bio !== undefined) updates.bio = bio;
         if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+        // Security: only admins can update roles or change emails
+        if (isAdmin) {
+            if (email !== undefined) updates.email = email;
+            if (role !== undefined) updates.role = role;
+        }
+
         updates.updatedAt = new Date();
 
-        if (Object.keys(updates).length === 1) {
+        if (Object.keys(updates).length === 1) { // plus updatedAt
             return res.status(400).json({
                 success: false,
-                error: 'No update fields provided'
+                error: 'No valid update fields provided'
             });
         }
 
