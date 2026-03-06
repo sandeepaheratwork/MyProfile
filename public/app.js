@@ -791,15 +791,19 @@ async function showBlogDetail(id, pushState = true) {
         if (data.success) {
             const blog = data.blog;
 
-            // Use marked to parse markdown content safely
+            // Extract hero image if present
+            const imgMatch = blog.content.match(/!\[.*?\]\((.*?)\)/);
+            const heroImageUrl = imgMatch ? imgMatch[1] : null;
+
+            // Transform content
             let content = blog.content;
 
             // Transform [sandbox:id] into iframe
             content = content.replace(/\[sandbox:(.*?)\]/g, (match, id) => {
                 return `
-                <div class="sandbox-wrapper" style="margin: 1.5rem 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border); height: 500px;">
+                <div class="sandbox-wrapper" style="margin: 2rem 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border); height: 500px; box-shadow: var(--shadow-md);">
                     <iframe src="https://codesandbox.io/embed/${id}?fontsize=14&hidenavigation=1&theme=dark"
-                        style="width:100%; height:500px; border:0; border-radius: 4px; overflow:hidden;"
+                        style="width:100%; height:500px; border:0; overflow:hidden;"
                         title="CodeSandbox Embed"
                         allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
                         sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
@@ -807,23 +811,70 @@ async function showBlogDetail(id, pushState = true) {
                 </div>`;
             });
 
-            // Use marked to parse markdown content safely
             const renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
 
             const detailHtml = `
-                <div class="blog-detail">
-                    <button class="btn btn-secondary btn-sm" style="margin-bottom: 1.5rem;" onclick="switchTab('blogs')">← Back to List</button>
-                    <h2>${escapeHtml(blog.title)}</h2>
-                    <div class="blog-meta">
-                        <span>By ${escapeHtml(blog.author.name)}</span> | 
-                        <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
+                <div class="blog-detail-container">
+                    <div class="blog-detail-actions">
+                        <button class="btn btn-secondary btn-sm back-to-list" onclick="switchTab('blogs')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
+                            Back to Insights
+                        </button>
+                        <button class="btn btn-primary btn-sm ai-explain-btn" onclick="toggleChat(); chatInput.value = 'Can you explain the key takeaways from the blog post \\'${escapeHtml(blog.title)}\\'?'; handleChatSubmit(new Event('submit'));">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
+                            </svg>
+                            Ask AI about this
+                        </button>
                     </div>
-                    <div class="blog-content markdown-body" style="margin-top: 1.5rem;">
-                        ${renderedContent}
-                    </div>
-                    <div class="blog-tags" style="margin-top: 2rem;">
-                        ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
-                    </div>
+
+                    <article class="blog-detail">
+                        ${heroImageUrl ? `
+                        <div class="blog-hero-image">
+                            <img src="${heroImageUrl}" alt="${escapeHtml(blog.title)}">
+                        </div>` : ''}
+
+                        <header class="blog-header">
+                            <div class="blog-category">Technical Insight</div>
+                            <h1>${escapeHtml(blog.title)}</h1>
+                            
+                            <div class="blog-author-strip">
+                                <div class="author-avatar-sm">${getInitials(blog.author.name)}</div>
+                                <div class="author-info-sm">
+                                    <span class="author-name">${escapeHtml(blog.author.name)}</span>
+                                    <span class="post-date">${new Date(blog.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+                                <div class="reading-time-badge">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    ${Math.max(1, Math.ceil(blog.content.trim().split(/\s+/).length / 200))} min read
+                                </div>
+                            </div>
+                        </header>
+
+                        <div class="blog-content markdown-body">
+                            ${renderedContent}
+                        </div>
+
+                        <footer class="blog-footer">
+                            <div class="blog-tags">
+                                ${blog.tags.map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
+                            </div>
+
+                            <div class="author-card">
+                                <div class="author-avatar-large">${getInitials(blog.author.name)}</div>
+                                <div class="author-bio">
+                                    <h4>Written by ${escapeHtml(blog.author.name)}</h4>
+                                    <p>Technical contributor at TechForge. Sharing insights on software architecture, modern web development, and AI implementation.</p>
+                                </div>
+                            </div>
+                        </footer>
+                    </article>
                 </div>
             `;
             document.getElementById('blogsGrid').innerHTML = detailHtml;
