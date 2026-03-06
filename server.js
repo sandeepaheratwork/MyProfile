@@ -311,6 +311,37 @@ function createMcpServer() {
         }
     );
 
+    // Tool: Search Blog Posts
+    server.tool(
+        "search_blogs",
+        "Search for technical blog posts by title or content keywords",
+        {
+            query: z.string().describe("The search term or keyword to find in blog posts")
+        },
+        async ({ query }) => {
+            try {
+                const collection = await getBlogsCollection();
+                const searchRegex = new RegExp(query, 'i');
+                const blogs = await collection.find({
+                    $or: [
+                        { title: { $regex: searchRegex } },
+                        { content: { $regex: searchRegex } },
+                        { tags: { $in: [searchRegex] } }
+                    ]
+                }).limit(10).toArray();
+
+                return {
+                    content: [{ type: "text", text: JSON.stringify(blogs, null, 2) }]
+                };
+            } catch (error) {
+                return {
+                    content: [{ type: "text", text: `Error searching blogs: ${error.message}` }],
+                    isError: true
+                };
+            }
+        }
+    );
+
     return server;
 }
 
@@ -1072,10 +1103,44 @@ app.post('/api/chat', async (req, res) => {
                         : `There are no blog posts yet. Would you like me to help you write one?`;
                     break;
 
+                case 'search_blogs':
+                    if (entities.searchQuery) {
+                        const blogsCol = await getBlogsCollection();
+                        const blogRegex = new RegExp(entities.searchQuery, 'i');
+                        const matchingBlogs = await blogsCol.find({
+                            $or: [
+                                { title: { $regex: blogRegex } },
+                                { content: { $regex: blogRegex } },
+                                { tags: { $in: [blogRegex] } }
+                            ]
+                        }).limit(5).toArray();
+
+                        actionResult = {
+                            type: 'blog_list',
+                            count: matchingBlogs.length,
+                            blogs: matchingBlogs
+                        };
+                        response = matchingBlogs.length > 0
+                            ? `I found ${matchingBlogs.length} blog posts matching "${entities.searchQuery}".`
+                            : `I couldn't find any blog posts matching "${entities.searchQuery}".`;
+                    } else {
+                        response = "I'd be happy to search our technical blogs! What keywords are you looking for?";
+                        actionResult = { type: 'error', message: 'Missing search query' };
+                    }
+                    break;
+
                 case 'help':
                     actionResult = {
                         type: 'help',
-                        message: 'I can help you manage profiles. Try saying things like:\n• "Create a profile for Jane Doe, jane@company.com, Product Manager"\n• "Find all engineers"\n• "Update John\'s role to Senior Developer"\n• "Show all profiles"'
+                        message: 'I can help you manage profiles and technical blogs. Try saying things like:\n\n' +
+                            '**Profiles:**\n' +
+                            '• "Create a profile for Jane Doe, jane@company.com"\n' +
+                            '• "Find all engineers"\n' +
+                            '• "Show all profiles"\n\n' +
+                            '**Technical Blogs:**\n' +
+                            '• "Show me recent blogs"\n' +
+                            '• "Search for blogs about React"\n' +
+                            '• "Post a blog titled \'AI Tips\' with content \'Use MCP for scale\'"'
                     };
                     break;
             }
