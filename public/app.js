@@ -872,11 +872,6 @@ async function showBlogDetail(id, pushState = true) {
                     </div>
 
                     <article class="blog-detail">
-                        ${heroImageUrl ? `
-                        <div class="blog-hero-image">
-                            <img src="${heroImageUrl}" alt="${escapeHtml(blog.title)}">
-                        </div>` : ''}
-
                         <header class="blog-header">
                             <div class="blog-category">Technical Insight</div>
                             <h1>${escapeHtml(blog.title)}</h1>
@@ -896,6 +891,11 @@ async function showBlogDetail(id, pushState = true) {
                                 </div>
                             </div>
                         </header>
+
+                        ${heroImageUrl ? `
+                        <div class="blog-hero-image">
+                            <img src="${heroImageUrl}" alt="${escapeHtml(blog.title)}">
+                        </div>` : ''}
 
                         <div class="blog-content markdown-body">
                             ${renderedContent}
