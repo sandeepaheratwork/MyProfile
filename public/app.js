@@ -1881,7 +1881,9 @@ function addChatMessage(content, type, action = null) {
     }
 
     html += `</div>`;
-    messageEl.innerHTML = html;
+
+    // Explicitly sanitize HTML to prevent XSS attacks from potentially malicious model output
+    messageEl.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
 
     chatMessages.appendChild(messageEl);
     scrollChatToBottom();

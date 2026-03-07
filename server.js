@@ -5,9 +5,15 @@ const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
 // JWT Secret — falls back to a hard-coded dev value if not set
-const JWT_SECRET = process.env.JWT_SECRET || 'profile-manager-dev-secret-2024';
+const JWT_SECRET_ENV = process.env.JWT_SECRET;
+if (process.env.NODE_ENV === 'production' && !JWT_SECRET_ENV) {
+    console.error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
+    process.exit(1);
+}
+const JWT_SECRET = JWT_SECRET_ENV || 'profile-manager-dev-secret-2024';
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
 const { z } = require('zod');
@@ -36,7 +42,7 @@ if (GEMINI_API_KEY) {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: process.env.NODE_ENV === 'production' ? (process.env.ALLOWED_ORIGIN || 'https://myprofile.com') : '*' }));
 
 // MCP SSE Routes (Must be before any global body-parsers to avoid stream consumption)
 const mcpTransports = new Map();
@@ -131,8 +137,12 @@ async function getProfilesCollection() {
 }
 
 // Helper to hash password
-function hashPassword(password) {
-    return crypto.createHash('sha256').update(password).digest('hex');
+async function hashPassword(password) {
+    return await bcrypt.hash(password, 10);
+}
+
+async function comparePassword(password, hash) {
+    return await bcrypt.compare(password, hash);
 }
 
 // Middleware
@@ -442,7 +452,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         // Verify password
-        if (!profile.password || profile.password !== hashPassword(password)) {
+        if (!profile.password || !(await comparePassword(password, profile.password))) {
             return res.status(401).json({ success: false, error: 'Invalid email or password' });
         }
 
@@ -489,7 +499,7 @@ app.post('/api/register', async (req, res) => {
         const newUser = {
             name,
             email,
-            password: hashPassword(password),
+            password: await hashPassword(password),
             role: 'user', // Default role
             createdAt: new Date(),
             updatedAt: new Date()
@@ -528,7 +538,7 @@ app.post('/api/admin/setup', async (req, res) => {
             { email: { $regex: new RegExp(`^${email}$`, 'i') } },
             {
                 $set: {
-                    password: hashPassword(password),
+                    password: await hashPassword(password),
                     role: 'Admin', // Force role to Admin
                     updatedAt: new Date()
                 }
@@ -568,7 +578,7 @@ app.post('/api/change-password', async (req, res) => {
         }
 
         // Verify current password
-        if (profile.password && profile.password !== hashPassword(currentPassword)) {
+        if (profile.password && !(await comparePassword(currentPassword, profile.password))) {
             return res.status(401).json({ success: false, error: 'Incorrect current password' });
         }
 
@@ -577,7 +587,7 @@ app.post('/api/change-password', async (req, res) => {
             { _id: profile._id },
             {
                 $set: {
-                    password: hashPassword(newPassword),
+                    password: await hashPassword(newPassword),
                     updatedAt: new Date()
                 }
             }
@@ -717,6 +727,21 @@ app.post('/api/upload', checkAuth, async (req, res) => {
         // Clean base64 string (remove data:image/png;base64, prefix)
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
+
+        // Check magic bytes to ensure it's actually an image
+        const isImage = (buf) => {
+            if (!buf || buf.length < 4) return false;
+            const hex = buf.toString('hex', 0, 4).toUpperCase();
+            if (hex.startsWith('FFD8FF')) return true; // JPEG
+            if (hex === '89504E47') return true; // PNG
+            if (hex === '47494638') return true; // GIF
+            if (hex === '52494646' && buf.toString('ascii', 8, 12) === 'WEBP') return true; // WebP
+            return false;
+        };
+
+        if (!isImage(buffer)) {
+            return res.status(400).json({ success: false, error: 'Invalid file type. Only genuine images are allowed.' });
+        }
 
         const collection = await getImagesCollection();
         const imageDoc = {
@@ -888,7 +913,7 @@ app.post('/api/reset-password', async (req, res) => {
         await collection.updateOne(
             { _id: user._id },
             {
-                $set: { password: hashPassword(newPassword) },
+                $set: { password: await hashPassword(newPassword) },
                 $unset: { resetToken: "", resetTokenExpiry: "" }
             }
         );
