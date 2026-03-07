@@ -188,6 +188,28 @@ function setupEventListeners() {
             return;
         }
         document.getElementById('blogModal').classList.add('active');
+
+        // Restore Draft
+        const savedDraft = localStorage.getItem('draft_blog');
+        if (savedDraft) {
+            try {
+                const draft = JSON.parse(savedDraft);
+                const titleInput = document.getElementById('blogTitleInput');
+                const tagsInput = document.getElementById('blogTagsInput');
+                const contentInput = document.getElementById('blogContentInput');
+
+                if (titleInput && draft.title) titleInput.value = draft.title;
+                if (tagsInput && draft.tags) tagsInput.value = draft.tags;
+                if (contentInput && draft.content) contentInput.value = draft.content;
+
+                if (window.innerWidth > 1024) {
+                    updateBlogPreview();
+                }
+            } catch (e) {
+                console.error('Failed to restore draft', e);
+            }
+        }
+
         document.getElementById('blogTitleInput').focus();
     });
 
@@ -238,21 +260,73 @@ function setupEventListeners() {
             }
         });
         // Paste support
-        blogContentInput.addEventListener('paste', (e) => {
+        blogContentInput.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            const textContent = (e.clipboardData || e.originalEvent.clipboardData).getData('text');
+
+            // Image Paste
             for (const item of items) {
                 if (item.type.indexOf('image') !== -1) {
                     const file = item.getAsFile();
                     handleBlogImageUpload(file);
+                    return; // exit early if it's an image
+                }
+            }
+
+            // URL Paste for Rich Previews
+            if (textContent && /^https?:\/\/[^\s]+$/.test(textContent.trim())) {
+                const url = textContent.trim();
+
+                // Show a loading indicator temporarily
+                const placeholder = `\n\n[Loading preview for ${url}...]()\n\n`;
+                const cursorFallback = blogContentInput.value.length;
+                const start = blogContentInput.selectionStart ?? cursorFallback;
+                const end = blogContentInput.selectionEnd ?? cursorFallback;
+                blogContentInput.value = blogContentInput.value.substring(0, start) + placeholder + blogContentInput.value.substring(end);
+
+                try {
+                    const res = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+                    const data = await res.json();
+
+                    if (data.success && data.preview.title) {
+                        const previewMetadata = JSON.stringify(data.preview);
+                        // Save string as base64 to avoid markdown parsing breaking the JSON string
+                        const encodedMeta = btoa(unescape(encodeURIComponent(previewMetadata)));
+                        const linkCardMarkdown = `\n\n[link-preview:${encodedMeta}]\n\n`;
+                        blogContentInput.value = blogContentInput.value.replace(placeholder, linkCardMarkdown);
+                    } else {
+                        // Revert to plain url if preview failed
+                        blogContentInput.value = blogContentInput.value.replace(placeholder, `\n\n${url}\n\n`);
+                    }
+                    blogContentInput.dispatchEvent(new Event('input'));
+                } catch (error) {
+                    blogContentInput.value = blogContentInput.value.replace(placeholder, `\n\n${url}\n\n`);
                 }
             }
         });
 
-        // Live Preview in Split Mode
+        // Live Preview in Split Mode and Autosave Draft
+        let draftTimeout;
+        const saveDraft = () => {
+            clearTimeout(draftTimeout);
+            draftTimeout = setTimeout(() => {
+                const title = document.getElementById('blogTitleInput')?.value || '';
+                const tags = document.getElementById('blogTagsInput')?.value || '';
+                const content = document.getElementById('blogContentInput')?.value || '';
+
+                if (title || content || tags) {
+                    localStorage.setItem('draft_blog', JSON.stringify({ title, tags, content }));
+                } else {
+                    localStorage.removeItem('draft_blog');
+                }
+            }, 1000); // Debounce for 1 second
+        };
+
         const updateOnInput = () => {
             if (window.innerWidth > 1024) {
                 updateBlogPreview();
             }
+            saveDraft();
         };
 
         blogContentInput.addEventListener('input', updateOnInput);
@@ -854,6 +928,7 @@ async function handleBlogSubmit(e) {
         const data = await response.json();
 
         if (data.success) {
+            localStorage.removeItem('draft_blog');
             showToast('Blog post published!', 'success');
             closeBlogModal();
             loadBlogs();
@@ -903,7 +978,36 @@ async function showBlogDetail(id, pushState = true) {
                 </div>`;
             });
 
-            const renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
+            // Transform [link-preview:base64] into Rich Cards
+            content = content.replace(/\[link-preview:(.*?)\]/g, (match, base64Str) => {
+                try {
+                    const decodedMeta = decodeURIComponent(escape(atob(base64Str)));
+                    const meta = JSON.parse(decodedMeta);
+                    return `
+                    <div style="margin: 2rem 0;">
+                        <a href="${escapeHtml(meta.url)}" target="_blank" style="text-decoration: none; color: inherit; display: block; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; background: var(--bg-card); transition: transform 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm);" onmouseover="this.style.boxShadow='var(--shadow-md)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.boxShadow='var(--shadow-sm)'; this.style.transform='translateY(0)';">
+                            ${meta.image ? `<div style="width: 100%; height: 200px; background-image: url('${escapeHtml(meta.image)}'); background-size: cover; background-position: center;"></div>` : ''}
+                            <div style="padding: 1rem;">
+                                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem; color: var(--color-text);">${escapeHtml(meta.title || 'Link')}</h3>
+                                ${meta.description ? `<p style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--color-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(meta.description)}</p>` : ''}
+                                <span style="font-size: 0.8rem; color: var(--color-accent-primary); display: flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                                    ${escapeHtml(new URL(meta.url).hostname)}
+                                </span>
+                            </div>
+                        </a>
+                    </div>`;
+                } catch (e) {
+                    return ''; // Fallback if data is corrupted
+                }
+            });
+
+            let renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
+
+            // Convert @mentions and #hashtags to clickable/styled links inside the HTML
+            // Note: We avoid replacing content inside existing hrefs/srcs by using a naive lookbehind
+            renderedContent = renderedContent.replace(/(^|\s)@(\w+)/g, '$1<span style="color: var(--color-accent-primary); font-weight: 500; cursor: pointer;">@$2</span>');
+            renderedContent = renderedContent.replace(/(^|\s)#(\w+)/g, '$1<span style="color: var(--color-accent-primary); cursor: pointer;">#$2</span>');
 
             const detailHtml = `
                 <div class="blog-detail-container">
@@ -955,8 +1059,15 @@ async function showBlogDetail(id, pushState = true) {
 
                         <footer class="blog-footer">
                             <div class="blog-tags">
-                                ${blog.tags.map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
+                                ${(blog.tags || []).map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
                             </div>
+                            
+                            ${blog.mentions && blog.mentions.length > 0 ? `
+                            <div class="blog-tags" style="margin-top: 10px;">
+                                <span style="font-size: 0.85rem; color: var(--color-text-muted); margin-right: 10px;">Mentions:</span>
+                                ${(blog.mentions || []).map(mention => `<span class="blog-tag" style="background: rgba(99, 102, 241, 0.1); color: var(--color-accent-primary);">@${escapeHtml(mention)}</span>`).join('')}
+                            </div>
+                            ` : ''}
 
                             <div class="author-card">
                                 <div class="author-avatar-large">${getInitials(blog.author.name)}</div>
@@ -1038,7 +1149,8 @@ function renderBlogs(blogs) {
                         ${escapeHtml(cleanContent)}
                     </div>
                     <div class="blog-tags">
-                        ${blog.tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
+                        ${(blog.tags || []).slice(0, 3).map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
+                        ${(blog.tags || []).length > 3 ? `<span class="blog-tag" style="background: transparent; padding: 0;">+${blog.tags.length - 3}</span>` : ''}
                     </div>
                 </div>
             </div>

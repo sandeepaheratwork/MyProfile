@@ -6,6 +6,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const cheerio = require('cheerio');
 
 // JWT Secret — falls back to a hard-coded dev value if not set
 const JWT_SECRET_ENV = process.env.JWT_SECRET;
@@ -830,11 +831,33 @@ app.post('/api/blogs', checkAuth, async (req, res) => {
             if (authorProfile) authorName = authorProfile.name;
         } catch (_) { /* userId may not be a valid ObjectId on some edge case */ }
 
+        let finalTags = [...(tags || [])];
+        let mentions = [];
+
+        // Extract #hashtags from content body
+        const hashtagRegex = /#(\w+)/g;
+        let hashtagMatch;
+        while ((hashtagMatch = hashtagRegex.exec(content)) !== null) {
+            if (!finalTags.includes(hashtagMatch[1])) {
+                finalTags.push(hashtagMatch[1]);
+            }
+        }
+
+        // Extract @mentions from content body
+        const mentionRegex = /@(\w+)/g;
+        let mentionMatch;
+        while ((mentionMatch = mentionRegex.exec(content)) !== null) {
+            if (!mentions.includes(mentionMatch[1])) {
+                mentions.push(mentionMatch[1]);
+            }
+        }
+
         const collection = await getBlogsCollection();
         const blog = {
             title,
             content,
-            tags: tags || [],
+            tags: finalTags,
+            mentions: mentions,
             author: { id: req.session.userId, name: authorName },
             createdAt: new Date(),
             updatedAt: new Date()
@@ -1418,6 +1441,50 @@ app.post('/api/chat', async (req, res) => {
             isRateLimited,
             action: null
         });
+    }
+});
+
+// ========================================
+// Link Preview Endpoint
+// ========================================
+app.get('/api/link-preview', async (req, res) => {
+    try {
+        const { url } = req.query;
+        if (!url || !url.startsWith('http')) {
+            return res.status(400).json({ success: false, error: 'Valid URL is required' });
+        }
+
+        const response = await fetch(url, {
+            // Add a common user agent so sites don't block us as a bot
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch URL: ${response.statusText}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        const getMetaTag = (names) => {
+            for (let name of names) {
+                const content = $(`meta[property="${name}"], meta[name="${name}"]`).attr('content');
+                if (content) return content;
+            }
+            return null;
+        };
+
+        const previewData = {
+            title: getMetaTag(['og:title', 'twitter:title']) || $('title').text(),
+            description: getMetaTag(['og:description', 'twitter:description', 'description']),
+            image: getMetaTag(['og:image', 'twitter:image', 'twitter:image:src']),
+            url: url
+        };
+
+        res.json({ success: true, preview: previewData });
+    } catch (error) {
+        console.error('Link preview error:', error);
+        res.status(500).json({ success: false, error: 'Could not fetch link preview' });
     }
 });
 
