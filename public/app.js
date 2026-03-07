@@ -223,13 +223,16 @@ function setupEventListeners() {
         blogContentInput.addEventListener('dragover', (e) => {
             e.preventDefault();
             blogContentInput.style.borderColor = 'var(--color-accent-primary)';
+            blogContentInput.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
         });
         blogContentInput.addEventListener('dragleave', () => {
             blogContentInput.style.borderColor = '';
+            blogContentInput.style.boxShadow = '';
         });
         blogContentInput.addEventListener('drop', (e) => {
             e.preventDefault();
             blogContentInput.style.borderColor = '';
+            blogContentInput.style.boxShadow = '';
             if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                 handleBlogImageUpload(e.dataTransfer.files[0]);
             }
@@ -244,12 +247,18 @@ function setupEventListeners() {
                 }
             }
         });
+
+        // Live Preview in Split Mode
+        blogContentInput.addEventListener('input', () => {
+            if (window.innerWidth > 1024) {
+                updateBlogPreview();
+            }
+        });
     }
 
     // Blog Modal Preview Tabs
     const blogWriteTab = document.getElementById('blogWriteTab');
     const blogPreviewTab = document.getElementById('blogPreviewTab');
-    const blogPreviewContent = document.getElementById('blogPreviewContent');
 
     if (blogWriteTab && blogPreviewTab) {
         blogWriteTab.addEventListener('click', () => {
@@ -260,8 +269,8 @@ function setupEventListeners() {
             blogPreviewTab.style.borderBottomColor = 'transparent';
             blogPreviewTab.style.color = 'var(--color-text-muted)';
 
-            blogContentInput.style.display = 'block';
-            blogPreviewContent.style.display = 'none';
+            document.querySelector('.write-pane').style.display = 'flex';
+            document.querySelector('.preview-pane').style.display = 'none';
         });
 
         blogPreviewTab.addEventListener('click', () => {
@@ -272,14 +281,22 @@ function setupEventListeners() {
             blogWriteTab.style.borderBottomColor = 'transparent';
             blogWriteTab.style.color = 'var(--color-text-muted)';
 
-            blogContentInput.style.display = 'none';
-            blogPreviewContent.style.display = 'block';
+            document.querySelector('.write-pane').style.display = 'none';
+            document.querySelector('.preview-pane').style.display = 'flex';
 
-            // Render markdown
-            const content = blogContentInput.value || '*No content to preview*';
-            blogPreviewContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
+            updateBlogPreview();
         });
     }
+}
+
+function updateBlogPreview() {
+    const blogContentInput = document.getElementById('blogContentInput');
+    const blogPreviewContent = document.getElementById('blogPreviewContent');
+    if (!blogContentInput || !blogPreviewContent) return;
+
+    // Render markdown
+    const content = blogContentInput.value || '*No content to preview*';
+    blogPreviewContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
 }
 
 function showForgotPasswordForm() {

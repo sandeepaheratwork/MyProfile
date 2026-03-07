@@ -810,7 +810,59 @@ body::before {
 }
 
 .modal-lg {
-    max-width: 800px;
+    max-width: 1200px;
+    /* Wider for split editor */
+}
+
+/* Split Editor Layout */
+.editor-container {
+    display: flex;
+    gap: 1.5rem;
+    padding: var(--spacing-xl);
+    background: var(--color-bg-secondary);
+}
+
+.editor-pane {
+    flex: 1;
+    min-width: 0;
+    /* Prevents flex items from bursting */
+}
+
+@media (max-width: 1024px) {
+    .modal-lg {
+        max-width: 800px;
+    }
+
+    .editor-container {
+        flex-direction: column;
+        padding: var(--spacing-lg);
+    }
+
+    .editor-pane.preview-pane {
+        padding-left: 0 !important;
+        border-left: none !important;
+        display: none;
+        /* Controlled by tabs on mobile */
+    }
+
+    .editor-tabs {
+        display: flex !important;
+    }
+}
+
+@media (min-width: 1025px) {
+    .editor-tabs {
+        display: none !important;
+        /* Hide tabs when in side-by-side mode */
+    }
+
+    .editor-pane.preview-pane {
+        display: flex !important;
+    }
+
+    .editor-pane.write-pane {
+        display: flex !important;
+    }
 }
 
 .modal-overlay.active .modal {

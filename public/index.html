@@ -453,7 +453,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="modal-tabs"
+            <div class="modal-tabs editor-tabs"
                 style="display: flex; gap: 1rem; margin: 0 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--color-border);">
                 <button type="button" class="modal-tab active" id="blogWriteTab"
                     style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--color-accent-primary); color: var(--color-accent-primary); font-weight: 600; cursor: pointer;">Write</button>
@@ -480,42 +480,54 @@
                         placeholder="e.g. JavaScript, Architecture, GCP">
                 </div>
 
-                <div class="form-group">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label for="blogContentInput" style="margin-bottom: 0;">Content (Markdown supported)</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button type="button" class="btn btn-secondary btn-sm" id="blogInsertSandboxBtn"
-                                style="padding: 4px 8px;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                    style="width: 14px; height: 14px; margin-right: 4px;">
-                                    <path
-                                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
-                                    </path>
-                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                                </svg>
-                                Insert Sandbox
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="blogInsertImageBtn"
-                                style="padding: 4px 8px;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                    style="width: 14px; height: 14px; margin-right: 4px;">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                    <circle cx="8.5" cy="8.5" r="1.5" />
-                                    <polyline points="21 15 16 10 5 21" />
-                                </svg>
-                                Insert Image
-                            </button>
+                <div class="editor-container" style="display: flex; gap: 1.5rem; min-height: 450px;">
+                    <div class="editor-pane write-pane" style="flex: 1; display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <label for="blogContentInput"
+                                style="margin-bottom: 0; font-size: 0.875rem; font-weight: 600;">Drafting Post</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button type="button" class="btn btn-secondary btn-sm" id="blogInsertSandboxBtn"
+                                    style="padding: 4px 8px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="width: 14px; height: 14px; margin-right: 4px;">
+                                        <path
+                                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                                        </path>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                    </svg>
+                                    Insert Sandbox
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="blogInsertImageBtn"
+                                    style="padding: 4px 8px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="width: 14px; height: 14px; margin-right: 4px;">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                    Insert Image
+                                </button>
+                            </div>
+                            <input type="file" id="blogImageInput" accept="image/*" style="display: none;">
                         </div>
-                        <input type="file" id="blogImageInput" accept="image/*" style="display: none;">
+                        <textarea id="blogContentInput" class="form-input form-textarea"
+                            style="flex: 1; min-height: 400px; font-family: 'JetBrains Mono', 'Fira Code', monospace; line-height: 1.6; font-size: 0.95rem; background: var(--color-bg-tertiary);"
+                            placeholder="Write your technical insight here... Markdown supported! Drop images directly into this area."
+                            required></textarea>
                     </div>
-                    <textarea id="blogContentInput" class="form-input form-textarea"
-                        placeholder="Write your technical insight... Tip: You can drag and drop images here!" rows="12"
-                        required></textarea>
-                    <div id="blogPreviewContent" class="markdown-body"
-                        style="display: none; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 300px; max-height: 400px; overflow-y: auto;">
-                        <!-- Rendered preview will go here -->
+
+                    <div class="editor-pane preview-pane"
+                        style="flex: 1; display: flex; flex-direction: column; border-left: 1px solid var(--color-border); padding-left: 1.5rem;">
+                        <label
+                            style="margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--color-accent-primary);">Live
+                            Visual Preview</label>
+                        <div id="blogPreviewContent" class="markdown-body"
+                            style="flex: 1; padding: 1.5rem; background: white; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow-y: auto; overflow-x: hidden; min-height: 400px;">
+                            <p style="color: var(--color-text-muted); text-align: center; margin-top: 2rem;">Your
+                                content will render here as you type...</p>
+                        </div>
                     </div>
                 </div>
 
