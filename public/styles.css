@@ -77,6 +77,13 @@ body {
     line-height: 1.6;
 }
 
+img,
+svg,
+iframe,
+video {
+    max-width: 100%;
+}
+
 /* Background Pattern */
 body::before {
     content: '';
@@ -1061,18 +1068,55 @@ body {
     width: 100%;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
 @media (max-width: 768px) {
     .header-content {
-        padding: var(--spacing-md);
-        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-xs);
+        flex-wrap: nowrap;
+        /* Keep it in one row until we really can't */
+        overflow: hidden;
+    }
+
+    .logo {
+        flex-shrink: 1;
+        min-width: 0;
     }
 
     .logo h1 {
-        font-size: 1.1rem;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* On very small devices, hide the logo text to make room for buttons */
+    @media (max-width: 420px) {
+        .logo h1 {
+            display: none;
+        }
     }
 
     .header-content .btn span {
         display: none;
+    }
+
+    .header-actions {
+        gap: 0.25rem;
+        flex-shrink: 0;
+        /* Ensures buttons don't disappear */
+    }
+
+    .header-actions .btn {
+        padding: 6px;
+        min-width: 36px;
+        height: 36px;
+        margin-left: 0 !important;
     }
 
     .main-content {
@@ -1105,7 +1149,8 @@ body {
         font-size: 0.875rem;
     }
 
-    .profiles-grid {
+    .profiles-grid,
+    .blogs-grid {
         grid-template-columns: 1fr;
     }
 
