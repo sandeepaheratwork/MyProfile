@@ -1161,10 +1161,10 @@ body {
         text-overflow: ellipsis;
     }
 
-    /* On very small devices, hide the logo text to make room for buttons */
+    /* On very small devices, keep the logo text but let it shrink further if needed */
     @media (max-width: 420px) {
         .logo h1 {
-            display: none;
+            font-size: 0.8rem;
         }
     }
 
