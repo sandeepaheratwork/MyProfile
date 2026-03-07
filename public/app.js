@@ -249,11 +249,15 @@ function setupEventListeners() {
         });
 
         // Live Preview in Split Mode
-        blogContentInput.addEventListener('input', () => {
+        const updateOnInput = () => {
             if (window.innerWidth > 1024) {
                 updateBlogPreview();
             }
-        });
+        };
+
+        blogContentInput.addEventListener('input', updateOnInput);
+        document.getElementById('blogTitleInput')?.addEventListener('input', updateOnInput);
+        document.getElementById('blogTagsInput')?.addEventListener('input', updateOnInput);
     }
 
     // Blog Modal Preview Tabs
@@ -290,13 +294,53 @@ function setupEventListeners() {
 }
 
 function updateBlogPreview() {
+    const blogTitleInput = document.getElementById('blogTitleInput');
+    const blogTagsInput = document.getElementById('blogTagsInput');
     const blogContentInput = document.getElementById('blogContentInput');
     const blogPreviewContent = document.getElementById('blogPreviewContent');
     if (!blogContentInput || !blogPreviewContent) return;
 
-    // Render markdown
-    const content = blogContentInput.value || '*No content to preview*';
-    blogPreviewContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : content;
+    const title = blogTitleInput ? blogTitleInput.value : 'Post Title';
+    const tags = blogTagsInput ? blogTagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+    let content = blogContentInput.value || '';
+
+    // Extract hero image logic like showBlogDetail
+    const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+    const heroImageUrl = imgMatch ? imgMatch[1] : null;
+
+    if (heroImageUrl) {
+        content = content.replace(/!\[.*?\]\(.*?\)/, '');
+    }
+
+    const renderedContent = typeof marked !== 'undefined' ? marked.parse(content || '*No content to preview*') : escapeHtml(content);
+
+    blogPreviewContent.innerHTML = `
+        <article class="blog-detail" style="border: none; box-shadow: none; background: transparent;">
+            <header class="blog-header" style="padding: 0 0 1.5rem 0;">
+                <h1 style="font-size: 1.75rem; margin-bottom: 1rem;">${escapeHtml(title || 'Post Title')}</h1>
+                <div class="blog-author-strip">
+                    <div class="author-info-sm" style="margin-left: 0;">
+                        <span class="author-name">Draft by You</span>
+                        <span class="post-date">Just now</span>
+                    </div>
+                </div>
+            </header>
+
+            ${heroImageUrl ? `
+            <div class="blog-hero-image" style="margin-bottom: 2rem; border-radius: var(--radius-md);">
+                <img src="${heroImageUrl}" alt="Preview">
+            </div>` : ''}
+
+            <div class="blog-content markdown-body" style="padding: 0;">
+                ${renderedContent}
+            </div>
+            
+            ${tags.length > 0 ? `
+            <div class="blog-tags" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border);">
+                ${tags.map(tag => `<span class="blog-tag">${escapeHtml(tag)}</span>`).join('')}
+            </div>` : ''}
+        </article>
+    `;
 }
 
 function showForgotPasswordForm() {
@@ -962,12 +1006,6 @@ function renderBlogs(blogs) {
                     </svg>
                 </button>` : ''}
                 
-                ${imageUrl ? `
-                <div class="blog-card-image">
-                    <img src="${imageUrl}" alt="${escapeHtml(blog.title)}">
-                </div>
-                ` : ''}
-                
                 <div class="blog-card-content">
                     <h3>${escapeHtml(blog.title)}</h3>
                     <div class="blog-meta">
@@ -981,6 +1019,13 @@ function renderBlogs(blogs) {
                             ${readingTime} min read
                         </div>
                     </div>
+
+                    ${imageUrl ? `
+                    <div class="blog-card-image" style="margin: 1rem 0; border-radius: var(--radius-md);">
+                        <img src="${imageUrl}" alt="${escapeHtml(blog.title)}">
+                    </div>
+                    ` : ''}
+
                     <div class="blog-content-preview">
                         ${escapeHtml(cleanContent)}
                     </div>
