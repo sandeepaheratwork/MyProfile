@@ -812,6 +812,14 @@ async function handleBlogImageUpload(file) {
                 const markdownImage = `\n![${file.name}](${data.url})\n`;
                 blogContentInput.value = blogContentInput.value.replace(placeholder, markdownImage);
                 blogContentInput.dispatchEvent(new Event('input'));
+
+                // Switch to Preview tab on mobile to show the image view immediately
+                if (window.innerWidth <= 1024) {
+                    const blogPreviewTab = document.getElementById('blogPreviewTab');
+                    if (blogPreviewTab) {
+                        blogPreviewTab.click();
+                    }
+                }
             } else {
                 throw new Error(data.error);
             }
