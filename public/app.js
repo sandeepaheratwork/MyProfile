@@ -828,12 +828,15 @@ async function showBlogDetail(id, pushState = true) {
         if (data.success) {
             const blog = data.blog;
 
-            // Extract hero image if present
-            const imgMatch = blog.content.match(/!\[.*?\]\((.*?)\)/);
+            // Extract hero image if present and remove it from content to avoid duplication
+            let content = blog.content;
+            const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
             const heroImageUrl = imgMatch ? imgMatch[1] : null;
 
-            // Transform content
-            let content = blog.content;
+            if (heroImageUrl) {
+                // Remove the first image match from the content
+                content = content.replace(/!\[.*?\]\(.*?\)/, '');
+            }
 
             // Transform [sandbox:id] into iframe
             content = content.replace(/\[sandbox:(.*?)\]/g, (match, id) => {
