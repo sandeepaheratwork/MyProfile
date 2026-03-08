@@ -332,6 +332,10 @@ function setupEventListeners() {
         blogContentInput.addEventListener('input', updateOnInput);
         document.getElementById('blogTitleInput')?.addEventListener('input', updateOnInput);
         document.getElementById('blogTagsInput')?.addEventListener('input', updateOnInput);
+
+        // Add Autocomplete for @mentions and #tags
+        setupAutocomplete(blogContentInput);
+        setupTagsInputAutocomplete(document.getElementById('blogTagsInput'));
     }
 
     // Blog Modal Preview Tabs
@@ -365,6 +369,296 @@ function setupEventListeners() {
             updateBlogPreview();
         });
     }
+}
+
+// Real-time Autocomplete implementation logic
+function setupAutocomplete(textarea) {
+    if (!textarea) return;
+
+    // Create dropdown container
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    document.body.appendChild(dropdown);
+
+    let activeIndex = -1;
+    let currentMatch = null;
+    let lastQuery = null;
+
+    const hideDropdown = () => {
+        dropdown.style.display = 'none';
+        currentMatch = null;
+    };
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (e.target !== textarea && !dropdown.contains(e.target)) {
+            hideDropdown();
+        }
+    });
+
+    // Keyboard navigation inside text area
+    textarea.addEventListener('keydown', (e) => {
+        if (dropdown.style.display === 'block') {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    e.preventDefault();
+                    items[activeIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        }
+    });
+
+    const updateActiveItem = (items) => {
+        items.forEach((item, idx) => {
+            if (idx === activeIndex) {
+                item.classList.add('active');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    };
+
+    textarea.addEventListener('input', async () => {
+        const cursorPosition = textarea.selectionStart;
+        const textBeforeCursor = textarea.value.substring(0, cursorPosition);
+
+        // Match @mention or #hashtag at the end of what's typed
+        // Note: allowing letters, numbers, hyphens, and spaces up to 20 characters for a broader match 
+        const match = textBeforeCursor.match(/(?:^|\s)([@#])([\w\-\s]{0,20})$/);
+
+        if (!match) {
+            hideDropdown();
+            return;
+        }
+
+        const type = match[1]; // "@" or "#"
+        const query = match[2];
+        // Calculate the starting index of the query
+        const isSpaced = textBeforeCursor.match(/\s[@#][\w\-\s]{0,20}$/);
+        currentMatch = { index: match.index + (isSpaced ? 1 : 0), length: query.length + 1, type };
+
+        // Debounce requests
+        if (query === lastQuery && dropdown.style.display === 'block') return;
+        lastQuery = query;
+
+        let results = [];
+        try {
+            if (type === '@') {
+                const res = await fetch(`/api/profiles/search?q=${query}`);
+                const data = await res.json();
+                if (data.success && data.profiles.length > 0) {
+                    results = data.profiles.slice(0, 5).map(p => ({ label: p.name, value: p.name }));
+                }
+            } else if (type === '#') {
+                const res = await fetch(`/api/tags/search?q=${query}`);
+                const data = await res.json();
+                if (data.success && data.tags.length > 0) {
+                    results = data.tags.slice(0, 5).map(t => ({ label: t, value: t }));
+                }
+            }
+        } catch (e) {
+            console.error('Autocomplete fetch error:', e);
+        }
+
+        if (results.length === 0) {
+            hideDropdown();
+            return;
+        }
+
+        // Render dropdown
+        dropdown.innerHTML = '';
+        results.forEach((result) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+
+            // If the label accidentally contains the prefix already, strip it for clean display
+            const cleanLabel = result.label.startsWith(type) ? result.label.substring(1) : result.label;
+
+            item.innerHTML = `${type === '@' ? '👤' : '🏷️'} <strong>${type}${escapeHtml(cleanLabel)}</strong>`;
+
+            // Handle Selection
+            item.addEventListener('click', () => {
+                const text = textarea.value;
+                const newText = text.substring(0, currentMatch.index) + type + cleanLabel + ' ' + text.substring(cursorPosition);
+                textarea.value = newText;
+
+                // Reposition cursor right after newly inserted tag + space
+                const newCursorPos = currentMatch.index + type.length + cleanLabel.length + 1;
+                textarea.focus();
+                textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+                hideDropdown();
+                textarea.dispatchEvent(new Event('input')); // Trigger autosave
+            });
+            dropdown.appendChild(item);
+        });
+
+        // Position dropdown relatively to textarea container
+        const rect = textarea.getBoundingClientRect();
+        dropdown.style.top = `${rect.top + window.scrollY + 10}px`;
+        dropdown.style.left = `${rect.left + window.scrollX + 20}px`;
+        dropdown.style.display = 'block';
+
+        activeIndex = 0;
+        updateActiveItem(dropdown.querySelectorAll('.autocomplete-item'));
+    });
+}
+
+function setupTagsInputAutocomplete(inputField) {
+    if (!inputField) return;
+
+    // Create dropdown container
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    document.body.appendChild(dropdown);
+
+    let activeIndex = -1;
+    let currentMatch = null;
+    let lastQuery = null;
+
+    const hideDropdown = () => {
+        dropdown.style.display = 'none';
+        currentMatch = null;
+    };
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (e.target !== inputField && !dropdown.contains(e.target)) {
+            hideDropdown();
+        }
+    });
+
+    // Keyboard navigation inside text area
+    inputField.addEventListener('keydown', (e) => {
+        if (dropdown.style.display === 'block') {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    e.preventDefault();
+                    items[activeIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        }
+    });
+
+    const updateActiveItem = (items) => {
+        items.forEach((item, idx) => {
+            if (idx === activeIndex) {
+                item.classList.add('active');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    };
+
+    inputField.addEventListener('input', async () => {
+        const cursorPosition = inputField.selectionStart;
+        const textBeforeCursor = inputField.value.substring(0, cursorPosition);
+
+        let commaIndex = textBeforeCursor.lastIndexOf(',');
+        const startIndex = commaIndex !== -1 ? commaIndex + 1 : 0;
+        const currentWord = textBeforeCursor.substring(startIndex);
+
+        // Remove leading spaces
+        const matches = currentWord.match(/^\s*(.*)$/);
+        const leadingSpaces = currentWord.length - matches[1].length;
+        const query = matches[1];
+
+        // Only search if there are characters
+        if (query.trim().length === 0) {
+            hideDropdown();
+            return;
+        }
+
+        currentMatch = { index: startIndex + leadingSpaces, length: query.length };
+
+        // Debounce requests
+        if (query === lastQuery && dropdown.style.display === 'block') return;
+        lastQuery = query;
+
+        let results = [];
+        try {
+            // Strip a leading '#' if the user typed it, since tags are saved in the DB without the '#' prefix
+            const searchQuery = query.startsWith('#') ? query.substring(1) : query;
+            const res = await fetch(`/api/tags/search?q=${searchQuery}`);
+            const data = await res.json();
+            if (data.success && data.tags.length > 0) {
+                results = data.tags.slice(0, 5).map(t => ({ label: t, value: t }));
+            }
+        } catch (e) {
+            console.error('Autocomplete fetch error:', e);
+        }
+
+        if (results.length === 0) {
+            hideDropdown();
+            return;
+        }
+
+        // Render dropdown
+        dropdown.innerHTML = '';
+        results.forEach((result) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+
+            // Clean display
+            const cleanLabel = result.label.startsWith('#') ? result.label.substring(1) : result.label;
+
+            item.innerHTML = `🏷️ <strong>${escapeHtml(cleanLabel)}</strong>`;
+
+            // Handle Selection
+            item.addEventListener('click', () => {
+                const text = inputField.value;
+
+                // Find end of current tag (next comma or end of string)
+                let nextComma = text.indexOf(',', currentMatch.index);
+                if (nextComma === -1) nextComma = text.length;
+
+                const newText = text.substring(0, currentMatch.index) + cleanLabel + text.substring(nextComma);
+                inputField.value = newText;
+
+                // Reposition cursor right after newly inserted text
+                const newCursorPos = currentMatch.index + cleanLabel.length;
+                inputField.focus();
+                inputField.setSelectionRange(newCursorPos, newCursorPos);
+
+                hideDropdown();
+                inputField.dispatchEvent(new Event('input')); // Trigger autosave
+            });
+            dropdown.appendChild(item);
+        });
+
+        // Position dropdown relatively to input container
+        const rect = inputField.getBoundingClientRect();
+        dropdown.style.top = `${rect.bottom + window.scrollY + 2}px`;
+        dropdown.style.left = `${rect.left + window.scrollX}px`;
+        dropdown.style.display = 'block';
+
+        activeIndex = 0;
+        updateActiveItem(dropdown.querySelectorAll('.autocomplete-item'));
+    });
 }
 
 function updateBlogPreview() {

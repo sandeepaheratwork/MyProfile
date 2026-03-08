@@ -783,6 +783,23 @@ app.get('/api/images/:id', async (req, res) => {
     }
 });
 
+// Search existing tags for autocomplete
+app.get('/api/tags/search', async (req, res) => {
+    try {
+        const { q } = req.query;
+        const collection = await getBlogsCollection();
+        // Aggregation to get distinct tags efficiently, or just distinct
+        const allTags = await collection.distinct('tags');
+        let matchedTags = allTags || [];
+        if (q) {
+            matchedTags = matchedTags.filter(t => t && t.toLowerCase().includes(q.toLowerCase()));
+        }
+        res.json({ success: true, tags: matchedTags.slice(0, 5) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // List all blogs
 app.get('/api/blogs', async (req, res) => {
     try {
