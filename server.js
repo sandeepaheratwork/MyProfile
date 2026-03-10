@@ -49,6 +49,12 @@ app.use(cors({ origin: process.env.NODE_ENV === 'production' ? (process.env.ALLO
 const mcpTransports = new Map();
 
 app.get('/mcp/sse', async (req, res) => {
+    // SECURITY/COST SAVING: Disable SSE on Cloud Run to stop 24/7 billing
+    if (process.env.NODE_ENV === 'production') {
+        console.warn('Blocked SSE connection in production to prevent CPU billing.');
+        return res.status(403).json({ error: 'MCP Cloud functionality is disabled in production to prevent runaway compute costs. Please run locally instead.' });
+    }
+
     console.log('New MCP Cloud connection (SSE)');
 
     // Cloud Run / Proxy settings to prevent buffering
