@@ -893,18 +893,88 @@ app.post('/api/blogs', checkAuth, async (req, res) => {
     }
 });
 
-// Delete blog (Admin only)
-app.delete('/api/blogs/:id', checkAdminRole, async (req, res) => {
+// Delete blog (Admin or Author)
+app.delete('/api/blogs/:id', checkAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const collection = await getBlogsCollection();
-        const result = await collection.deleteOne({ _id: new ObjectId(id) });
 
-        if (result.deletedCount === 0) {
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+        if (!blog) {
             return res.status(404).json({ success: false, error: 'Blog not found' });
         }
 
+        const isAdmin = req.session.role && req.session.role.toLowerCase() === 'admin';
+        const isAuthor = blog.author.id === req.session.userId;
+        if (!isAdmin && !isAuthor) {
+            return res.status(403).json({ success: false, error: 'Access denied. You can only delete your own posts.' });
+        }
+
+        await collection.deleteOne({ _id: new ObjectId(id) });
+
         res.json({ success: true, message: 'Blog deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Edit blog (Admin or Author)
+app.put('/api/blogs/:id', checkAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, content, tags } = req.body;
+
+        if (!title || !content) {
+            return res.status(400).json({ success: false, error: 'Title and content are required' });
+        }
+
+        const collection = await getBlogsCollection();
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+        if (!blog) {
+            return res.status(404).json({ success: false, error: 'Blog not found' });
+        }
+
+        const isAdmin = req.session.role && req.session.role.toLowerCase() === 'admin';
+        const isAuthor = blog.author.id === req.session.userId;
+        if (!isAdmin && !isAuthor) {
+            return res.status(403).json({ success: false, error: 'Access denied. You can only edit your own posts.' });
+        }
+
+        let finalTags = [...(tags || [])];
+        let mentions = [];
+
+        // Extract #hashtags from content body
+        const hashtagRegex = /#(\w+)/g;
+        let hashtagMatch;
+        while ((hashtagMatch = hashtagRegex.exec(content)) !== null) {
+            if (!finalTags.includes(hashtagMatch[1])) {
+                finalTags.push(hashtagMatch[1]);
+            }
+        }
+
+        // Extract @mentions from content body
+        const mentionRegex = /@(\w+)/g;
+        let mentionMatch;
+        while ((mentionMatch = mentionRegex.exec(content)) !== null) {
+            if (!mentions.includes(mentionMatch[1])) {
+                mentions.push(mentionMatch[1]);
+            }
+        }
+
+        await collection.updateOne(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    title,
+                    content,
+                    tags: finalTags,
+                    mentions,
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        res.json({ success: true, message: 'Blog updated successfully' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

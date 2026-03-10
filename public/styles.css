@@ -1660,30 +1660,40 @@ body {
     opacity: 1;
 }
 
-/* Admin delete button on blog cards */
-.blog-delete-btn {
+/* Admin/Author action buttons on blog cards */
+.blog-card-actions {
     position: absolute;
     top: var(--spacing-md);
     right: var(--spacing-md);
+    display: flex;
+    gap: 0.5rem;
+    z-index: 10;
+}
+
+.blog-action-btn {
     width: 32px;
     height: 32px;
     padding: 0;
-    opacity: 0;
-    transition: opacity var(--transition-base), transform var(--transition-base);
-    z-index: 2;
+    transition: transform var(--transition-base), background-color 0.2s, color 0.2s;
+    background-color: var(--color-bg-primary);
+    /* Stand out against card */
+    border: 1px solid var(--color-border);
 }
 
-.blog-card:hover .blog-delete-btn {
-    opacity: 1;
-}
-
-.blog-delete-btn:hover {
+.blog-action-btn:hover {
     transform: scale(1.1);
 }
 
-.blog-delete-btn svg {
+.blog-action-btn svg {
     width: 14px;
     height: 14px;
+}
+
+@media (max-width: 768px) {
+    .blog-card-actions {
+        opacity: 1;
+        /* Always visible on mobile to avoid hover issues */
+    }
 }
 
 .blog-card {

@@ -187,6 +187,11 @@ function setupEventListeners() {
             showToast('Please register or log in to create a post.', 'error');
             return;
         }
+
+        const form = document.getElementById('blogForm');
+        form.reset();
+        form.removeAttribute('data-edit-id');
+
         document.getElementById('blogModal').classList.add('active');
 
         // Restore Draft
@@ -208,6 +213,11 @@ function setupEventListeners() {
             } catch (e) {
                 console.error('Failed to restore draft', e);
             }
+        } else {
+            // explicitly clear preview if no draft
+            if (window.innerWidth > 1024 && typeof updateBlogPreview === 'function') {
+                updateBlogPreview();
+            }
         }
 
         document.getElementById('blogTitleInput').focus();
@@ -226,6 +236,37 @@ function setupEventListeners() {
         blogInsertImageBtn.addEventListener('click', () => blogImageInput.click());
         blogImageInput.addEventListener('change', (e) => handleBlogImageUpload(e.target.files[0]));
     }
+
+    // Text Formatting Buttons (using mousedown + preventDefault to retain textarea focus)
+    const formatBtnBold = document.getElementById('blogFormatBoldBtn');
+    const formatBtnItalic = document.getElementById('blogFormatItalicBtn');
+    const formatBtnH2 = document.getElementById('blogFormatH2Btn');
+    const formatBtnLink = document.getElementById('blogFormatLinkBtn');
+
+    const applyFormat = (prefix, suffix = '') => {
+        if (!blogContentInput) return;
+        const start = blogContentInput.selectionStart;
+        const end = blogContentInput.selectionEnd;
+        const selectedText = blogContentInput.value.substring(start, end);
+        const text = blogContentInput.value;
+        const replaceStr = prefix + selectedText + suffix;
+        blogContentInput.value = text.substring(0, start) + replaceStr + text.substring(end);
+
+        // Adjust cursor position
+        blogContentInput.focus();
+        if (selectedText.length > 0) {
+            blogContentInput.setSelectionRange(start, start + replaceStr.length);
+        } else {
+            // Place cursor inside the formatting tags if nothing was selected
+            blogContentInput.setSelectionRange(start + prefix.length, start + prefix.length);
+        }
+        blogContentInput.dispatchEvent(new Event('input')); // Trigger preview/autosave
+    };
+
+    if (formatBtnBold) formatBtnBold.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('**', '**'); });
+    if (formatBtnItalic) formatBtnItalic.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('*', '*'); });
+    if (formatBtnH2) formatBtnH2.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('\n## ', '\n'); });
+    if (formatBtnLink) formatBtnLink.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('[', '](https://)'); });
 
     const blogInsertSandboxBtn = document.getElementById('blogInsertSandboxBtn');
     if (blogInsertSandboxBtn && blogContentInput) {
@@ -310,6 +351,12 @@ function setupEventListeners() {
         const saveDraft = () => {
             clearTimeout(draftTimeout);
             draftTimeout = setTimeout(() => {
+                const form = document.getElementById('blogForm');
+                if (form && form.dataset.editId) {
+                    // Do not overwrite the 'New Post' draft with an edit of an existing post
+                    return;
+                }
+
                 const title = document.getElementById('blogTitleInput')?.value || '';
                 const tags = document.getElementById('blogTagsInput')?.value || '';
                 const content = document.getElementById('blogContentInput')?.value || '';
@@ -1052,7 +1099,9 @@ async function loadBlogs() {
 
 function closeBlogModal() {
     document.getElementById('blogModal').classList.remove('active');
-    document.getElementById('blogForm').reset();
+    const form = document.getElementById('blogForm');
+    form.reset();
+    form.removeAttribute('data-edit-id');
     document.getElementById('submitBlogBtn').classList.remove('loading');
 
     // Reset tabs
@@ -1207,11 +1256,17 @@ async function handleBlogSubmit(e) {
     const content = document.getElementById('blogContentInput').value.trim();
     const submitBtn = document.getElementById('submitBlogBtn');
 
+    const form = document.getElementById('blogForm');
+    const editBlogId = form.dataset.editId;
+
     submitBtn.classList.add('loading');
 
     try {
-        const response = await fetch('/api/blogs', {
-            method: 'POST',
+        const url = editBlogId ? `/api/blogs/${editBlogId}` : '/api/blogs';
+        const method = editBlogId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json',
                 'x-auth-token': currentUser ? currentUser.token : ''
@@ -1223,7 +1278,8 @@ async function handleBlogSubmit(e) {
 
         if (data.success) {
             localStorage.removeItem('draft_blog');
-            showToast('Blog post published!', 'success');
+            showToast(editBlogId ? 'Blog post updated!' : 'Blog post published!', 'success');
+            form.removeAttribute('data-edit-id');
             closeBlogModal();
             loadBlogs();
         } else {
@@ -1399,25 +1455,41 @@ function renderBlogs(blogs) {
         const imgMatch = blog.content.match(/!\[.*?\]\((.*?)\)/);
         const imageUrl = imgMatch ? imgMatch[1] : null;
 
-        // Clean content for preview (remove markdown images and trim)
-        let cleanContent = blog.content.replace(/!\[.*?\]\(.*?\)/g, '').substring(0, 150);
+        // Clean content for preview (remove markdown images, markdown syntax, and trim)
+        let cleanContent = blog.content
+            .replace(/!\[.*?\]\(.*?\)/g, '')   // Remove images
+            .replace(/[#*`~>_]/g, '')          // Strip basic markdown symbols
+            .substring(0, 150);
         if (blog.content.length > 150) cleanContent += '...';
 
         // Calculate reading time (avg 200 words per minute)
         const words = blog.content.trim().split(/\s+/).length;
         const readingTime = Math.max(1, Math.ceil(words / 200));
 
+        const isAuthor = currentUser && currentUser.user && (currentUser.user._id === blog.author.id || currentUser.user.id === blog.author.id);
+        const canEditOrDelete = isAdmin || isAuthor;
+
         return `
-            <div class="blog-card" onclick="showBlogDetail('${blog._id}')" style="position: relative;">
-                ${isAdmin ? `
-                <button class="btn btn-danger btn-icon blog-delete-btn"
-                    title="Delete post"
-                    onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3,6 5,6 21,6"/>
-                        <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
-                    </svg>
-                </button>` : ''}
+            <div class="blog-card" onclick="showBlogDetail('${blog._id}')">
+                ${canEditOrDelete ? `
+                <div class="blog-card-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-secondary btn-icon blog-action-btn"
+                        title="Edit post"
+                        onclick="event.stopPropagation(); editBlogPost('${blog._id}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <button class="btn btn-danger btn-icon blog-action-btn"
+                        title="Delete post"
+                        onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3,6 5,6 21,6"/>
+                            <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                        </svg>
+                    </button>
+                </div>` : ''}
                 
                 <div class="blog-card-content">
                     <h3>${escapeHtml(blog.title)}</h3>
@@ -1478,6 +1550,38 @@ async function deleteBlogPost(id, btn) {
         showToast('Connection error. Please try again.', 'error');
         btn.disabled = false;
         btn.classList.remove('loading');
+    }
+}
+
+async function editBlogPost(id) {
+    try {
+        const response = await fetch(`/api/blogs/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.blog) {
+            const blog = data.blog;
+            document.getElementById('blogTitleInput').value = blog.title || '';
+            document.getElementById('blogTagsInput').value = (blog.tags || []).join(', ');
+            document.getElementById('blogContentInput').value = blog.content || '';
+
+            const form = document.getElementById('blogForm');
+            form.dataset.editId = blog._id;
+
+            // Switch to write tab and update preview if large screen
+            const blogWriteTab = document.getElementById('blogWriteTab');
+            if (blogWriteTab) blogWriteTab.click();
+
+            if (window.innerWidth > 1024 && typeof updateBlogPreview === 'function') {
+                updateBlogPreview();
+            }
+
+            document.getElementById('blogModal').classList.add('active');
+        } else {
+            showToast('Failed to load blog for editing', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('Connection error while fetching post details', 'error');
     }
 }
 
