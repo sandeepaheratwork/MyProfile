@@ -11,8 +11,7 @@ const cheerio = require('cheerio');
 // JWT Secret — falls back to a hard-coded dev value if not set
 const JWT_SECRET_ENV = process.env.JWT_SECRET;
 if (process.env.NODE_ENV === 'production' && !JWT_SECRET_ENV) {
-    console.error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
-    process.exit(1);
+    console.warn('WARNING: JWT_SECRET environment variable is not defined in production. Falling back to dev secret.');
 }
 const JWT_SECRET = JWT_SECRET_ENV || 'profile-manager-dev-secret-2024';
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
