@@ -50,7 +50,8 @@ const mcpTransports = new Map();
 
 app.get('/mcp/sse', async (req, res) => {
     // SECURITY/COST SAVING: Disable SSE on Cloud Run to stop 24/7 billing
-    if (process.env.NODE_ENV === 'production') {
+    // Cloud Run natively injects K_SERVICE, so we use that to detect production
+    if (process.env.NODE_ENV === 'production' || process.env.K_SERVICE) {
         console.warn('Blocked SSE connection in production to prevent CPU billing.');
         return res.status(403).json({ error: 'MCP Cloud functionality is disabled in production to prevent runaway compute costs. Please run locally instead.' });
     }

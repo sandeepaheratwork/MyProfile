@@ -14,6 +14,7 @@ COPY . .
 
 # Cloud Run injects PORT env var — default to 3001 locally
 ENV PORT=3001
+ENV NODE_ENV=production
 EXPOSE 3001
 
 # Start the server
