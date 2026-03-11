@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>TechForge</title>
     <meta name="description" content="Modern profile management interface for MCP Server">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -122,10 +123,9 @@
 
         <!-- Blogs Section -->
         <section class="blogs-section" id="blogsSection" style="display: none;">
-            <div class="section-header"
-                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Recent Technical Insights</h2>
-                <button class="btn btn-primary btn-sm" id="newBlogBtn">
+            <div class="section-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <h2 style="margin: 0;">Recent Technical Insights</h2>
+                <button class="btn btn-primary btn-sm" id="newBlogBtn" style="white-space: nowrap;">
                     New Post
                 </button>
             </div>
@@ -484,10 +484,10 @@
                 <div class="editor-container" style="display: flex; gap: 1.5rem; min-height: 450px;">
                     <div class="editor-pane write-pane" style="flex: 1; display: flex; flex-direction: column;">
                         <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <label for="blogContentInput"
                                 style="margin-bottom: 0; font-size: 0.875rem; font-weight: 600;">Drafting Post</label>
-                            <div style="display: flex; gap: 0.5rem;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                                 <button type="button" class="btn btn-secondary btn-sm" id="blogFormatBoldBtn"
                                     style="padding: 4px 8px; font-weight: bold;" title="Bold">
                                     B
@@ -541,7 +541,7 @@
                     </div>
 
                     <div class="editor-pane preview-pane"
-                        style="flex: 1; display: flex; flex-direction: column; border-left: 1px solid var(--color-border); padding-left: 1.5rem;">
+                        style="flex: 1; display: flex; flex-direction: column;">
                         <label
                             style="margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: var(--color-accent-primary);">Live
                             Visual Preview</label>
