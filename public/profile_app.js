@@ -50,6 +50,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
         showError('No profile ID specified');
     }
+
+    // Initialize native-feel Pull To Refresh on Mobile
+    if (typeof PullToRefresh !== 'undefined' && isCapacitor) {
+        PullToRefresh.init({
+            mainElement: 'body',
+            onRefresh() {
+                return new Promise(async (resolve) => {
+                    try {
+                        if (profileId) await loadProfile(profileId);
+                    } catch (e) {
+                        console.error('Refresh error', e); 
+                    }
+                    resolve();
+                });
+            }
+        });
+    }
 });
 
 async function loadProfile(id) {

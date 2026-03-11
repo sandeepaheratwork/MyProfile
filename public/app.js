@@ -99,6 +99,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Listen for back/forward buttons
     window.addEventListener('hashchange', handleRouting);
+
+    // Initialize native-feel Pull To Refresh on Mobile
+    if (typeof PullToRefresh !== 'undefined' && isCapacitor) {
+        PullToRefresh.init({
+            mainElement: 'body',
+            onRefresh() {
+                return new Promise(async (resolve) => {
+                    try {
+                        const loadingTasks = [];
+                        if (typeof loadBlogs === 'function') loadingTasks.push(loadBlogs());
+                        if (typeof loadProfiles === 'function') loadingTasks.push(loadProfiles());
+                        await Promise.all(loadingTasks);
+                    } catch (e) { console.error('Refresh error', e); }
+                    resolve();
+                });
+            }
+        });
+    }
 });
 
 function setupEventListeners() {
