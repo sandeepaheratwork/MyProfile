@@ -4,8 +4,8 @@
  */
 
 // API Base URL
-// Check strictly for http://localhost (no port string) to avoid blocking local webdev envs (e.g http://localhost:3001)
-const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'capacitor://localhost';
+// Check strictly for localhost without port string to avoid blocking local webdev envs (e.g http://localhost:3001)
+const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'https://localhost' || window.location.origin === 'capacitor://localhost';
 const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
 const API_URL = `${API_BASE_URL}/api/profiles`;
 
