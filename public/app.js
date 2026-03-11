@@ -950,9 +950,13 @@ function switchTab(tabId, pushState = true) {
     profilesSection.style.display = 'none';
     searchSection.style.display = 'none';
     myProfileSection.style.display = 'none';
+    
+    const blogStickyHeader = document.getElementById('blogStickyHeader');
+    if (blogStickyHeader) blogStickyHeader.style.display = 'none';
 
     if (tabId === 'blogs') {
         blogsSection.style.display = 'block';
+        if (blogStickyHeader) blogStickyHeader.style.display = 'flex';
         loadBlogs();
     } else if (tabId === 'profiles') {
         profilesSection.style.display = 'block';
