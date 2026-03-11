@@ -3,7 +3,22 @@
  */
 
 // API Base URL
-const API_URL = '/api/profiles';
+// Check strictly for http://localhost (no port string) to avoid blocking local webdev envs (e.g http://localhost:3001)
+const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'capacitor://localhost';
+const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
+const API_URL = `${API_BASE_URL}/api/profiles`;
+
+// Image URL Helper
+function getImageUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('/api/') && typeof API_BASE_URL !== 'undefined') {
+        return API_BASE_URL + url;
+    }
+    return url;
+}
+
 
 // DOM Elements
 const profileContent = document.getElementById('profileContent');
@@ -11,7 +26,22 @@ const loadingState = document.getElementById('loadingState');
 const errorState = document.getElementById('errorState');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    if (isCapacitor && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+        try {
+            const StatusBar = window.Capacitor.Plugins.StatusBar;
+            await StatusBar.setStyle({ style: 'DARK' });
+            if (window.Capacitor.getPlatform() === 'android') {
+                await StatusBar.setBackgroundColor({ color: '#ffffff' });
+                await StatusBar.setOverlaysWebView({ overlay: false });
+            } else {
+                await StatusBar.setOverlaysWebView({ overlay: true });
+            }
+        } catch (e) {
+            console.log('Error initializing StatusBar', e);
+        }
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const profileId = urlParams.get('id');
 
@@ -43,7 +73,7 @@ async function loadProfile(id) {
 function renderProfile(profile) {
     const initials = getInitials(profile.name);
     const avatarHtml = profile.imageUrl
-        ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+        ? `<img src="${getImageUrl(profile.imageUrl)}" alt="${escapeHtml(profile.name)}">`
         : initials;
 
     // Update document title

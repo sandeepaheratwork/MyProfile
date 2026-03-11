@@ -42,7 +42,21 @@ if (GEMINI_API_KEY) {
 }
 
 // Middleware
-app.use(cors({ origin: process.env.NODE_ENV === 'production' ? (process.env.ALLOWED_ORIGIN || 'https://myprofile.com') : '*' }));
+const allowedOrigins = [
+    'https://myprofile.com',
+    'capacitor://localhost',
+    'ionic://localhost',
+    'http://localhost',
+    'https://localhost'
+];
+
+if (process.env.ALLOWED_ORIGIN) {
+    allowedOrigins.push(process.env.ALLOWED_ORIGIN);
+}
+
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' ? allowedOrigins : '*'
+}));
 
 // MCP SSE Routes (Must be before any global body-parsers to avoid stream consumption)
 const mcpTransports = new Map();
@@ -975,6 +989,83 @@ app.put('/api/blogs/:id', checkAuth, async (req, res) => {
         );
 
         res.json({ success: true, message: 'Blog updated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Like/Unlike blog
+app.post('/api/blogs/:id/like', checkAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const collection = await getBlogsCollection();
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+        
+        if (!blog) {
+            return res.status(404).json({ success: false, error: 'Blog not found' });
+        }
+
+        const userId = req.session.userId;
+        const likes = blog.likes || [];
+        const isLiked = likes.includes(userId);
+
+        if (isLiked) {
+            // Unlike
+            await collection.updateOne(
+                { _id: new ObjectId(id) },
+                { $pull: { likes: userId } }
+            );
+        } else {
+            // Like
+            await collection.updateOne(
+                { _id: new ObjectId(id) },
+                { $addToSet: { likes: userId } }
+            );
+        }
+
+        const updatedBlog = await collection.findOne({ _id: new ObjectId(id) });
+        res.json({ success: true, likes: updatedBlog.likes || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add comment to blog
+app.post('/api/blogs/:id/comments', checkAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { content } = req.body;
+
+        if (!content || !content.trim()) {
+            return res.status(400).json({ success: false, error: 'Comment content is required' });
+        }
+
+        const profilesCollection = await getProfilesCollection();
+        let authorName = 'Anonymous';
+        try {
+            const authorProfile = await profilesCollection.findOne(
+                { _id: new ObjectId(req.session.userId) },
+                { projection: { name: 1, imageUrl: 1 } }
+            );
+            if (authorProfile) authorName = authorProfile.name;
+        } catch (_) {}
+
+        const collection = await getBlogsCollection();
+        
+        const newComment = {
+            id: new ObjectId().toString(),
+            userId: req.session.userId,
+            userName: authorName,
+            content: content.trim(),
+            createdAt: new Date()
+        };
+
+        await collection.updateOne(
+            { _id: new ObjectId(id) },
+            { $push: { comments: newComment } }
+        );
+
+        res.json({ success: true, comment: newComment });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

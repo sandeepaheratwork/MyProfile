@@ -1,0 +1,11 @@
+{
+  "appId": "com.techforge.app",
+  "appName": "TechForge",
+  "webDir": "public",
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK"
+    }
+  }
+}

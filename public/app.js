@@ -4,7 +4,22 @@
  */
 
 // API Base URL
-const API_URL = '/api/profiles';
+// Check strictly for http://localhost (no port string) to avoid blocking local webdev envs (e.g http://localhost:3001)
+const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'capacitor://localhost';
+const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
+const API_URL = `${API_BASE_URL}/api/profiles`;
+
+// Image URL Helper
+function getImageUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('/api/') && typeof API_BASE_URL !== 'undefined') {
+        return API_BASE_URL + url;
+    }
+    return url;
+}
+
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
@@ -40,10 +55,36 @@ let searchDebounceTimer = null;
 let currentUser = null; // Stores { token, user }
 
 // ========================================
+
+if (typeof marked !== 'undefined') {
+    marked.use({
+        renderer: {
+            image(href, title, text) {
+                return `<img src="${getImageUrl(href)}" alt="${text || ''}" title="${title || ''}">`;
+            }
+        }
+    });
+}
+
 // Initialization
 // ========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    if (isCapacitor && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+        try {
+            const StatusBar = window.Capacitor.Plugins.StatusBar;
+            await StatusBar.setStyle({ style: 'DARK' });
+            if (window.Capacitor.getPlatform() === 'android') {
+                await StatusBar.setBackgroundColor({ color: '#ffffff' });
+                await StatusBar.setOverlaysWebView({ overlay: false });
+            } else {
+                await StatusBar.setOverlaysWebView({ overlay: true });
+            }
+        } catch (e) {
+            console.log('Error initializing StatusBar', e);
+        }
+    }
+
     // Check for stored session
     const storedSession = localStorage.getItem('adminSession');
     if (storedSession) {
@@ -168,7 +209,29 @@ function setupEventListeners() {
 
     // Image Upload
     if (selectImageBtn) {
-        selectImageBtn.addEventListener('click', () => imageInput.click());
+        selectImageBtn.addEventListener('click', async () => {
+            if (isCapacitor && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
+                try {
+                    const Camera = window.Capacitor.Plugins.Camera;
+                    const image = await Camera.getPhoto({
+                        quality: 90,
+                        allowEditing: false,
+                        resultType: 'base64',  // For easy preview
+                        source: 'PROMPT'       // Shows 'Photos' or 'Camera'
+                    });
+
+                    if (image && image.base64String) {
+                        const base64Data = `data:image/${image.format};base64,${image.base64String}`;
+                        imagePreview.innerHTML = `<img src="${base64Data}" alt="Preview">`;
+                        imageUrlInput.value = base64Data; // Use data URL directly
+                    }
+                } catch (error) {
+                    console.log('User cancelled or camera error', error);
+                }
+            } else {
+                imageInput.click();
+            }
+        });
     }
 
     if (imageInput) {
@@ -233,7 +296,30 @@ function setupEventListeners() {
     const blogContentInput = document.getElementById('blogContentInput');
 
     if (blogInsertImageBtn && blogImageInput) {
-        blogInsertImageBtn.addEventListener('click', () => blogImageInput.click());
+        blogInsertImageBtn.addEventListener('click', async () => {
+            if (isCapacitor && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
+                try {
+                    const Camera = window.Capacitor.Plugins.Camera;
+                    const image = await Camera.getPhoto({
+                        quality: 90,
+                        allowEditing: false,
+                        resultType: 'base64',  // For easy upload
+                        source: 'PROMPT'       // Shows 'Photos' or 'Camera'
+                    });
+
+                    if (image && image.base64String) {
+                        const res = await fetch(`data:image/${image.format};base64,${image.base64String}`);
+                        const blob = await res.blob();
+                        const file = new File([blob], `capacitor-upload.${image.format}`, { type: `image/${image.format}` });
+                        handleBlogImageUpload(file);
+                    }
+                } catch (error) {
+                    console.log('User cancelled or camera error', error);
+                }
+            } else {
+                blogImageInput.click();
+            }
+        });
         blogImageInput.addEventListener('change', (e) => handleBlogImageUpload(e.target.files[0]));
     }
 
@@ -326,7 +412,7 @@ function setupEventListeners() {
                 blogContentInput.value = blogContentInput.value.substring(0, start) + placeholder + blogContentInput.value.substring(end);
 
                 try {
-                    const res = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+                    const res = await fetch(`${API_BASE_URL}/api/link-preview?url=${encodeURIComponent(url)}`);
                     const data = await res.json();
 
                     if (data.success && data.preview.title) {
@@ -503,13 +589,13 @@ function setupAutocomplete(textarea) {
         let results = [];
         try {
             if (type === '@') {
-                const res = await fetch(`/api/profiles/search?q=${query}`);
+                const res = await fetch(`${API_BASE_URL}/api/profiles/search?q=${query}`);
                 const data = await res.json();
                 if (data.success && data.profiles.length > 0) {
                     results = data.profiles.slice(0, 5).map(p => ({ label: p.name, value: p.name }));
                 }
             } else if (type === '#') {
-                const res = await fetch(`/api/tags/search?q=${query}`);
+                const res = await fetch(`${API_BASE_URL}/api/tags/search?q=${query}`);
                 const data = await res.json();
                 if (data.success && data.tags.length > 0) {
                     results = data.tags.slice(0, 5).map(t => ({ label: t, value: t }));
@@ -650,7 +736,7 @@ function setupTagsInputAutocomplete(inputField) {
         try {
             // Strip a leading '#' if the user typed it, since tags are saved in the DB without the '#' prefix
             const searchQuery = query.startsWith('#') ? query.substring(1) : query;
-            const res = await fetch(`/api/tags/search?q=${searchQuery}`);
+            const res = await fetch(`${API_BASE_URL}/api/tags/search?q=${searchQuery}`);
             const data = await res.json();
             if (data.success && data.tags.length > 0) {
                 results = data.tags.slice(0, 5).map(t => ({ label: t, value: t }));
@@ -743,7 +829,7 @@ function updateBlogPreview() {
 
             ${heroImageUrl ? `
             <div class="blog-hero-image" style="margin-bottom: 2rem; border-radius: var(--radius-md);">
-                <img src="${heroImageUrl}" alt="Preview">
+                <img src="${getImageUrl(heroImageUrl)}" alt="Preview">
             </div>` : ''}
 
             <div class="blog-content markdown-body" style="padding: 0;">
@@ -889,7 +975,7 @@ async function handleChangePassword(e) {
     errorEl.style.display = 'none';
 
     try {
-        const response = await fetch('/api/change-password', {
+        const response = await fetch(API_BASE_URL + '/api/change-password', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -928,7 +1014,7 @@ async function handleLogin(e) {
     errorEl.style.display = 'none';
 
     try {
-        const response = await fetch('/api/login', {
+        const response = await fetch(API_BASE_URL + '/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
@@ -975,7 +1061,7 @@ async function handleRegister(e) {
     errorEl.style.display = 'none';
 
     try {
-        const response = await fetch('/api/register', {
+        const response = await fetch(API_BASE_URL + '/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email, password })
@@ -1031,7 +1117,7 @@ function updateUIForRole(switchView = true) {
             const user = currentUser.user;
             const initials = getInitials(user.name);
             userAvatar.innerHTML = user.imageUrl
-                ? `<img src="${user.imageUrl}" alt="${escapeHtml(user.name)}">`
+                ? `<img src="${getImageUrl(user.imageUrl)}" alt="${escapeHtml(user.name)}">`
                 : initials;
             userAvatar.style.display = 'flex';
         }
@@ -1079,7 +1165,7 @@ async function loadBlogs() {
     blogsGrid.innerHTML = generateSkeletons(3, 'blog');
 
     try {
-        const response = await fetch('/api/blogs');
+        const response = await fetch(API_BASE_URL + '/api/blogs');
         const data = await response.json();
 
         if (data.success) {
@@ -1119,7 +1205,7 @@ async function handleForgotPassword(e) {
     errorEl.style.display = 'none';
 
     try {
-        const response = await fetch('/api/forgot-password', {
+        const response = await fetch(API_BASE_URL + '/api/forgot-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
@@ -1158,7 +1244,7 @@ async function handleResetPassword(e) {
     errorEl.style.display = 'none';
 
     try {
-        const response = await fetch('/api/reset-password', {
+        const response = await fetch(API_BASE_URL + '/api/reset-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, token, newPassword })
@@ -1210,7 +1296,7 @@ async function handleBlogImageUpload(file) {
             const base64 = e.target.result;
 
             // Upload to backend
-            const response = await fetch('/api/upload', {
+            const response = await fetch(API_BASE_URL + '/api/upload', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1262,7 +1348,7 @@ async function handleBlogSubmit(e) {
     submitBtn.classList.add('loading');
 
     try {
-        const url = editBlogId ? `/api/blogs/${editBlogId}` : '/api/blogs';
+        const url = editBlogId ? `${API_BASE_URL}/api/blogs/${editBlogId}` : API_BASE_URL + '/api/blogs';
         const method = editBlogId ? 'PUT' : 'POST';
 
         const response = await fetch(url, {
@@ -1299,7 +1385,7 @@ async function showBlogDetail(id, pushState = true) {
     }
 
     try {
-        const response = await fetch(`/api/blogs/${id}`);
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${id}`);
         const data = await response.json();
 
         if (data.success) {
@@ -1400,7 +1486,7 @@ async function showBlogDetail(id, pushState = true) {
 
                         ${heroImageUrl ? `
                         <div class="blog-hero-image">
-                            <img src="${heroImageUrl}" alt="${escapeHtml(blog.title)}">
+                            <img src="${getImageUrl(heroImageUrl)}" alt="${escapeHtml(blog.title)}">
                         </div>` : ''}
 
                         <div class="blog-content markdown-body">
@@ -1419,11 +1505,67 @@ async function showBlogDetail(id, pushState = true) {
                             </div>
                             ` : ''}
 
-                            <div class="author-card">
+                            <div class="blog-interaction-bar">
+                                <button class="interaction-btn like-btn ${blog.likes && currentUser && blog.likes.includes(currentUser.user.id) ? 'active' : ''}" onclick="toggleLike('${blog._id}', this)">
+                                    <svg viewBox="0 0 24 24" fill="${blog.likes && currentUser && blog.likes.includes(currentUser.user.id) ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                    ${blog.likes ? blog.likes.length : 0} ${(blog.likes && blog.likes.length === 1) ? 'Like' : 'Likes'}
+                                </button>
+                                <button class="interaction-btn" onclick="document.getElementById('commentInput') ? document.getElementById('commentInput').focus() : null">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                    </svg>
+                                    ${blog.comments ? blog.comments.length : 0} Comments
+                                </button>
+                                <button class="interaction-btn share-btn" onclick="shareBlog('${blog.title.replace(/'/g, "\\'")}')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                    </svg>
+                                    Share
+                                </button>
+                            </div>
+
+                            <div class="author-card" style="margin-top: 1.5rem;">
                                 <div class="author-avatar-large">${getInitials(blog.author.name)}</div>
                                 <div class="author-bio">
                                     <h4>Written by ${escapeHtml(blog.author.name)}</h4>
                                     <p>Technical contributor at TechForge. Sharing insights on software architecture, modern web development, and AI implementation.</p>
+                                </div>
+                            </div>
+
+                            <!-- Comments Section -->
+                            <div class="blog-comments-section">
+                                <h3>Comments (${blog.comments ? blog.comments.length : 0})</h3>
+                                
+                                ${currentUser ? `
+                                <div class="comment-input-area">
+                                    <div class="author-avatar-sm" style="flex-shrink: 0;">${getInitials(currentUser.user.name)}</div>
+                                    <textarea id="commentInput" class="comment-input" placeholder="Add a comment..."></textarea>
+                                    <button class="btn btn-primary" style="height: fit-content;" onclick="addComment('${blog._id}')">Post</button>
+                                </div>
+                                ` : `
+                                <div style="margin-bottom: 2rem; padding: 1rem; background: var(--color-bg-tertiary); border-radius: 8px; text-align: center;">
+                                    <p style="color: var(--color-text-secondary); margin-bottom: 1rem;">Please log in to join the conversation.</p>
+                                    <button class="btn btn-primary" onclick="window.scrollTo({top: 0}); document.getElementById('loginModal').classList.add('active');">Log In to Comment</button>
+                                </div>
+                                `}
+
+                                <div class="comments-list">
+                                    ${(blog.comments || []).slice().reverse().map(comment => `
+                                        <div class="comment-item">
+                                            <div class="author-avatar-sm" style="flex-shrink: 0; width: 36px; height: 36px; font-size: 0.8rem;">${getInitials(comment.userName)}</div>
+                                            <div class="comment-content">
+                                                <h5>${escapeHtml(comment.userName)}</h5>
+                                                <span class="comment-date">${new Date(comment.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
+                                                <p>${escapeHtml(comment.content)}</p>
+                                            </div>
+                                        </div>
+                                    `).join('')}
                                 </div>
                             </div>
                         </footer>
@@ -1451,72 +1593,115 @@ function renderBlogs(blogs) {
     const blogsGrid = document.getElementById('blogsGrid');
 
     blogsGrid.innerHTML = blogs.map(blog => {
-        // Extract first image URL from markdown content: ![alt](url)
-        const imgMatch = blog.content.match(/!\[.*?\]\((.*?)\)/);
-        const imageUrl = imgMatch ? imgMatch[1] : null;
-
-        // Clean content for preview (remove markdown images, markdown syntax, and trim)
-        let cleanContent = blog.content
-            .replace(/!\[.*?\]\(.*?\)/g, '')   // Remove images
-            .replace(/[#*`~>_]/g, '')          // Strip basic markdown symbols
-            .substring(0, 150);
-        if (blog.content.length > 150) cleanContent += '...';
-
-        // Calculate reading time (avg 200 words per minute)
-        const words = blog.content.trim().split(/\s+/).length;
-        const readingTime = Math.max(1, Math.ceil(words / 200));
-
         const isAuthor = currentUser && currentUser.user && (currentUser.user._id === blog.author.id || currentUser.user.id === blog.author.id);
         const canEditOrDelete = isAdmin || isAuthor;
 
+        // Extract hero image if present and remove it from content
+        let content = blog.content;
+        const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+        const heroImageUrl = imgMatch ? imgMatch[1] : null;
+        if (heroImageUrl) content = content.replace(/!\[.*?\]\(.*?\)/, '');
+
+        // Transform sandboxes
+        content = content.replace(/\[sandbox:(.*?)\]/g, (match, id) => {
+            return `<div class="sandbox-wrapper" style="margin: 1rem 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border); height: 400px; box-shadow: var(--shadow-sm);"><iframe src="https://codesandbox.io/embed/${id}?fontsize=14&hidenavigation=1&theme=dark" style="width:100%; height:400px; border:0; overflow:hidden;" sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"></iframe></div>`;
+        });
+
+        // Transform link previews
+        content = content.replace(/\[link-preview:(.*?)\]/g, (match, base64Str) => {
+            try {
+                const meta = JSON.parse(decodeURIComponent(escape(atob(base64Str))));
+                return `<div style="margin: 1rem 0;"><a href="${escapeHtml(meta.url)}" target="_blank" style="text-decoration: none; color: inherit; display: block; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; background: var(--bg-card); transition: transform 0.2s;"><div style="padding: 1rem;"><h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem; color: var(--color-text);">${escapeHtml(meta.title || 'Link')}</h3><p style="margin: 0 0 1rem 0; font-size: 0.9rem; color: var(--color-text-muted);">${escapeHtml(meta.description || '')}</p></div></a></div>`;
+            } catch (e) { return ''; }
+        });
+
+        // Render Markdown
+        let renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
+        renderedContent = renderedContent.replace(/(^|\s)@(\w+)/g, '$1<span style="color: var(--color-accent-primary); font-weight: 500; cursor: pointer;">@$2</span>');
+        renderedContent = renderedContent.replace(/(^|\s)#(\w+)/g, '$1<span style="color: var(--color-accent-primary); cursor: pointer;">#$2</span>');
+
         return `
-            <div class="blog-card" onclick="showBlogDetail('${blog._id}')">
+            <div class="blog-card" style="cursor: default;" id="blog-${blog._id}">
                 ${canEditOrDelete ? `
-                <div class="blog-card-actions" onclick="event.stopPropagation()">
-                    <button class="btn btn-secondary btn-icon blog-action-btn"
-                        title="Edit post"
-                        onclick="event.stopPropagation(); editBlogPost('${blog._id}')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
+                <div class="blog-card-actions">
+                    <button class="btn btn-secondary btn-icon blog-action-btn" title="Edit post" onclick="editBlogPost('${blog._id}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
-                    <button class="btn btn-danger btn-icon blog-action-btn"
-                        title="Delete post"
-                        onclick="event.stopPropagation(); deleteBlogPost('${blog._id}', this)">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3,6 5,6 21,6"/>
-                            <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
-                        </svg>
+                    <button class="btn btn-danger btn-icon blog-action-btn" title="Delete post" onclick="deleteBlogPost('${blog._id}', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/></svg>
                     </button>
                 </div>` : ''}
                 
                 <div class="blog-card-content">
-                    <h3>${escapeHtml(blog.title)}</h3>
-                    <div class="blog-meta">
-                        <span>By ${escapeHtml(blog.author.name)}</span>
-                        <span>${new Date(blog.createdAt).toLocaleDateString()}</span>
-                        <div class="reading-time">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            ${readingTime} min read
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                        <div class="author-avatar-sm" style="width: 48px; height: 48px; font-size: 1.1rem;">${getInitials(blog.author.name)}</div>
+                        <div>
+                            <h4 style="margin: 0; font-size: 1rem; color: var(--color-text-primary);">${escapeHtml(blog.author.name)}</h4>
+                            <span style="font-size: 0.8rem; color: var(--color-text-muted);">${new Date(blog.createdAt).toLocaleDateString()}</span>
                         </div>
                     </div>
 
-                    ${imageUrl ? `
-                    <div class="blog-card-image" style="margin: 1rem 0; border-radius: var(--radius-md);">
-                        <img src="${imageUrl}" alt="${escapeHtml(blog.title)}">
+                    <h2 style="font-size: 1.25rem; margin-bottom: 1rem; color: var(--color-text-primary);">${escapeHtml(blog.title)}</h2>
+
+                    ${heroImageUrl ? `
+                    <div class="blog-card-image" style="margin: 1rem 0 -0.5rem 0; border-radius: var(--radius-md); overflow: hidden;">
+                        <img src="${getImageUrl(heroImageUrl)}" alt="${escapeHtml(blog.title)}">
                     </div>
                     ` : ''}
 
-                    <div class="blog-content-preview">
-                        ${escapeHtml(cleanContent)}
+                    <div class="blog-content markdown-body" style="margin-top: 1rem; max-height: 400px; overflow-y: auto;">
+                        ${renderedContent}
                     </div>
-                    <div class="blog-tags">
-                        ${(blog.tags || []).slice(0, 3).map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
-                        ${(blog.tags || []).length > 3 ? `<span class="blog-tag" style="background: transparent; padding: 0;">+${blog.tags.length - 3}</span>` : ''}
+
+                    <div class="blog-tags" style="margin-top: 1rem;">
+                        ${(blog.tags || []).map(tag => `<span class="blog-tag">#${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                </div>
+
+                <div class="blog-interaction-bar" style="margin-top: 1rem; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 0.5rem 0; margin-left: var(--spacing-lg); margin-right: var(--spacing-lg);">
+                    <button class="interaction-btn like-btn ${blog.likes && currentUser && blog.likes.includes(currentUser.user.id) ? 'active' : ''}" onclick="toggleLike('${blog._id}', this)">
+                        <svg viewBox="0 0 24 24" fill="${blog.likes && currentUser && blog.likes.includes(currentUser.user.id) ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        ${blog.likes ? blog.likes.length : 0}
+                    </button>
+                    <button class="interaction-btn" onclick="const cc = document.getElementById('comments-${blog._id}'); cc.style.display = cc.style.display === 'none' ? 'block' : 'none';">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                        </svg>
+                        ${blog.comments ? blog.comments.length : 0}
+                    </button>
+                    <button class="interaction-btn share-btn" onclick="shareBlog('${blog.title.replace(/'/g, "\\'")}', '${blog._id}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                        Share
+                    </button>
+                </div>
+
+                <!-- Inline Comments Section -->
+                <div id="comments-${blog._id}" style="display: none; padding: 1rem var(--spacing-lg);">
+                    ${currentUser ? `
+                    <div class="comment-input-area" style="margin-bottom: 1rem;">
+                        <textarea id="commentInput-${blog._id}" class="comment-input" placeholder="Add a comment..." style="min-height: 40px; padding: 8px 12px; font-size: 0.9rem;"></textarea>
+                        <button class="btn btn-primary btn-sm" style="height: fit-content;" onclick="addInlineComment('${blog._id}')">Post</button>
+                    </div>
+                    ` : `<p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center;">Log in to join the conversation</p>`}
+                    
+                    <div class="comments-list">
+                        ${(blog.comments || []).slice().reverse().map(c => `
+                            <div class="comment-item" style="gap: 0.75rem; margin-bottom: 0.75rem;">
+                                <div class="author-avatar-sm" style="flex-shrink: 0; width: 32px; height: 32px; font-size: 0.75rem;">${getInitials(c.userName)}</div>
+                                <div class="comment-content" style="padding: 0.5rem 0.75rem;">
+                                    <h5 style="margin-bottom: 2px; font-size: 0.85rem;">${escapeHtml(c.userName)}</h5>
+                                    <p style="font-size: 0.9rem; margin:0;">${escapeHtml(c.content)}</p>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             </div>
@@ -1531,7 +1716,7 @@ async function deleteBlogPost(id, btn) {
     btn.classList.add('loading');
 
     try {
-        const response = await fetch(`/api/blogs/${id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${id}`, {
             method: 'DELETE',
             headers: { 'x-auth-token': currentUser ? currentUser.token : '' }
         });
@@ -1555,7 +1740,7 @@ async function deleteBlogPost(id, btn) {
 
 async function editBlogPost(id) {
     try {
-        const response = await fetch(`/api/blogs/${id}`);
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${id}`);
         const data = await response.json();
 
         if (data.success && data.blog) {
@@ -1589,7 +1774,7 @@ async function loadMyProfile() {
     const content = document.getElementById('myProfileContent');
 
     try {
-        const response = await fetch('/api/profiles/me', {
+        const response = await fetch(API_BASE_URL + '/api/profiles/me', {
             headers: { 'x-auth-token': currentUser ? currentUser.token : '' }
         });
 
@@ -1622,7 +1807,7 @@ function renderMyProfile(profile) {
             <div class="profile-detail-content">
                 <div class="profile-image-container large">
                     ${profile.imageUrl
-            ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+            ? `<img src="${getImageUrl(profile.imageUrl)}" alt="${escapeHtml(profile.name)}">`
             : `<div class="profile-initials xl">${profile.name[0]}</div>`
         }
                 </div>
@@ -1685,8 +1870,8 @@ function handleLogout() {
     // Clear all possible session keys (belt-and-suspenders)
     localStorage.removeItem('adminSession');
     localStorage.removeItem('currentUser');
-    // Hard reload ensures no in-memory state lingers
-    window.location.reload();
+    // Using explicit href fixes Android Capacitor Webview white screen on reload
+    window.location.href = 'index.html';
 }
 
 // ========================================
@@ -1813,7 +1998,7 @@ function renderProfiles() {
 function createProfileCard(profile) {
     const initials = getInitials(profile.name);
     const avatarHtml = profile.imageUrl
-        ? `<img src="${profile.imageUrl}" alt="${escapeHtml(profile.name)}">`
+        ? `<img src="${getImageUrl(profile.imageUrl)}" alt="${escapeHtml(profile.name)}">`
         : initials;
 
     const roleHtml = profile.role
@@ -1888,7 +2073,7 @@ function openModal(profile = null) {
 
         // Handle Image Preview
         imageUrlInput.value = profile.imageUrl || '';
-        imagePreview.innerHTML = profile.imageUrl ? `<img src="${profile.imageUrl}" alt="Preview">` : '';
+        imagePreview.innerHTML = profile.imageUrl ? `<img src="${getImageUrl(profile.imageUrl)}" alt="Preview">` : '';
         if (!profile.imageUrl) {
             resetImagePreview();
         }
@@ -2268,7 +2453,7 @@ async function handleChatSubmit(e) {
     const token = sessionData ? JSON.parse(sessionData).token : null;
 
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(API_BASE_URL + '/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2420,5 +2605,152 @@ function scrollChatToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// ========================================
+// Blog Interaction Functions
+// ========================================
+
+async function toggleLike(blogId, btnObj) {
+    if (!currentUser) {
+        showToast('Please log in to like this post', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${blogId}/like`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            const likesCount = data.likes.length;
+            const isLiked = data.likes.includes(currentUser.user.id);
+            
+            if (isLiked) {
+                btnObj.classList.add('active');
+            } else {
+                btnObj.classList.remove('active');
+            }
+            
+            btnObj.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                ${likesCount} ${likesCount === 1 ? 'Like' : 'Likes'}
+            `;
+        }
+    } catch (err) {
+        console.error('Like error:', err);
+    }
+}
+
+async function addComment(blogId) {
+    if (!currentUser) {
+        showToast('Please log in to comment', 'warning');
+        return;
+    }
+
+    const commentInput = document.getElementById('commentInput');
+    const content = commentInput.value.trim();
+    
+    if (!content) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${blogId}/comments`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            },
+            body: JSON.stringify({ content })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            commentInput.value = '';
+            showToast('Comment added!', 'success');
+            // Reload the blog detail to show the new comment
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('id') === blogId) {
+                // If it's a standalone detail
+            } else {
+                // Re-render
+                showBlogDetail(blogId);
+            }
+        } else {
+            showToast(data.error || 'Failed to add comment', 'error');
+        }
+    } catch (err) {
+        console.error('Comment error:', err);
+        showToast('Connection error', 'error');
+    }
+}
+
+async function addInlineComment(blogId) {
+    if (!currentUser) {
+        showToast('Please log in to comment', 'warning');
+        return;
+    }
+
+    const commentInput = document.getElementById(`commentInput-${blogId}`);
+    const content = commentInput.value.trim();
+    
+    if (!content) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${blogId}/comments`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            },
+            body: JSON.stringify({ content })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            commentInput.value = '';
+            showToast('Comment added!', 'success');
+            // Reload the feed, then reopen the comment block
+            const oldScrollY = window.scrollY;
+            await loadBlogs();
+            window.scrollTo(0, oldScrollY);
+            
+            const commentsContainer = document.getElementById(`comments-${blogId}`);
+            if(commentsContainer) {
+                commentsContainer.style.display = 'block';
+            }
+        } else {
+            showToast(data.error || 'Failed to add comment', 'error');
+        }
+    } catch (err) {
+        console.error('Comment error:', err);
+        showToast('Connection error', 'error');
+    }
+}
+
+async function shareBlog(title, blogId) {
+    // Generate the specific URL to this blog instead of sharing the generic site root
+    const shareUrl = `${window.location.origin}${window.location.pathname}?id=${blogId}#blogs`;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: title,
+                url: shareUrl
+            });
+        } catch (err) {
+            console.log('Share canceled or failed', err);
+        }
+    } else {
+        navigator.clipboard.writeText(shareUrl);
+        showToast('Link copied to clipboard!', 'success');
+    }
+}
+
 // Initialize chat on DOM ready
 document.addEventListener('DOMContentLoaded', initChat);
+console.log('Location:', window.location.href); console.log('Protocol:', window.location.protocol); console.log('Origin:', window.location.origin);
