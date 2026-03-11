@@ -109,7 +109,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     try {
                         const loadingTasks = [];
                         if (typeof loadBlogs === 'function') loadingTasks.push(loadBlogs());
-                        if (typeof loadProfiles === 'function') loadingTasks.push(loadProfiles());
+                        if (typeof loadProfiles === 'function' && currentUser && currentUser.user && currentUser.user.role === 'admin') {
+                            loadingTasks.push(loadProfiles());
+                        }
                         await Promise.all(loadingTasks);
                     } catch (e) { console.error('Refresh error', e); }
                     resolve();
