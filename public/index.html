@@ -29,13 +29,6 @@
             </div>
             <div class="header-actions">
                 <div id="userAvatar" class="user-avatar" style="display: none;"></div>
-                <button class="btn btn-primary" id="addProfileBtn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span>Add Profile</span>
-                </button>
                 <!-- Login Button -->
                 <button class="btn btn-secondary" id="loginBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,7 +36,7 @@
                         <polyline points="10 17 15 12 10 7" />
                         <line x1="15" y1="12" x2="3" y2="12" />
                     </svg>
-                    <span>Login as Admin</span>
+                    <span>Login</span>
                 </button>
                 <div id="adminBadge" class="admin-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -53,7 +46,7 @@
                 </div>
                 <!-- Notification Bell -->
                 <div id="notificationBellWrap" style="display:none; position:relative;">
-                    <button class="btn btn-secondary btn-icon" id="notificationBellBtn" title="Notifications" onclick="toggleNotificationPanel()">
+                    <button class="btn btn-secondary btn-icon" id="notificationBellBtn" title="Notifications">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -103,15 +96,6 @@
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
                 Technical Blogs
-            </button>
-            <button class="nav-tab" data-tab="profiles" id="adminProfilesTab" style="display: none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                User Management
             </button>
             <button class="nav-tab" data-tab="my-profile" id="userProfileTab" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -200,9 +184,6 @@
                 </div>
                 <h3>No profiles found</h3>
                 <p>Get started by adding your first profile</p>
-                <button class="btn btn-primary" id="addFirstProfileBtn">
-                    Create Profile
-                </button>
             </div>
 
             <!-- Loading State -->
@@ -268,6 +249,9 @@
                 <div class="form-group">
                     <label for="regPassword">Password</label>
                     <input type="password" id="regPassword" class="form-input" placeholder="Choose a password" required>
+                    <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;">
+                        Min. 8 characters with at least one uppercase letter and one number.
+                    </p>
                 </div>
                 <div id="registerError"
                     style="color: var(--color-danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
@@ -363,6 +347,9 @@
                     <label for="newPassword">New Password</label>
                     <input type="password" id="newPassword" class="form-input" placeholder="Enter new password"
                         required>
+                    <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;">
+                        Min. 8 characters with at least one uppercase letter and one number.
+                    </p>
                 </div>
 
                 <div class="form-group">
@@ -690,15 +677,6 @@
             </svg>
             <span>Home</span>
         </button>
-        <button class="bottom-nav-item" data-tab="profiles" id="bottomProfilesTab">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span>Profiles</span>
-        </button>
         <button class="bottom-nav-item" id="bottomNewPostBtn">
             <div class="plus-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -708,7 +686,7 @@
             </div>
             <span>Post</span>
         </button>
-        <button class="bottom-nav-item" id="bottomNotifBtn" onclick="toggleNotificationPanel()">
+        <button class="bottom-nav-item" id="bottomNotifBtn">
             <div style="position: relative;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -717,13 +695,6 @@
                 <span id="notifBadgeBottom" class="notif-badge-small" style="display: none;">0</span>
             </div>
             <span>Notif</span>
-        </button>
-        <button class="bottom-nav-item" data-tab="my-profile" id="bottomProfileTab">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21a8 8 0 1 0-16 0" />
-                <circle cx="12" cy="7" r="4" />
-            </svg>
-            <span>Profile</span>
         </button>
     </nav>
 

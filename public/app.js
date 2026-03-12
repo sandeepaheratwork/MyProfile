@@ -164,7 +164,12 @@ async function initPushNotifications() {
 
                 PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
                     const url = action.notification?.data?.url;
-                    if (url) window.location.hash = url.replace(/^.*#/, '#');
+                    if (url) {
+                        window.location.hash = url.replace(/^.*#/, '#');
+                    } else {
+                        // Open the notifications panel if no specific URL
+                        toggleNotificationPanel();
+                    }
                 });
             }
         }
@@ -213,17 +218,15 @@ function urlBase64ToUint8Array(base64String) {
 let notifPollingInterval = null;
 
 function toggleNotificationPanel(e) {
+    if (e) e.stopPropagation();
     const panel = document.getElementById('notificationPanel');
     const isVisible = panel.style.display === 'flex';
-    
-    // Close other panels if any
     
     if (!isVisible) {
         panel.style.display = 'flex';
         fetchNotifications();
-        
-        // Mark all as read after a short delay or when opening
-        // For this UX, we'll keep them showing "unread" dot until individual interaction or "Mark all read" click
+        // Clear badge count automatically when panel is opened
+        markAllNotificationsRead();
     } else {
         panel.style.display = 'none';
     }
@@ -419,18 +422,30 @@ function setupEventListeners() {
         }
     });
 
+    // Notifications
+    const bellBtn = document.getElementById('notificationBellBtn');
+    if (bellBtn) bellBtn.addEventListener('click', toggleNotificationPanel);
+
+    const bottomNotifBtn = document.getElementById('bottomNotifBtn');
+    if (bottomNotifBtn) bottomNotifBtn.addEventListener('click', toggleNotificationPanel);
+
     // Close notification panel when clicking outside
     document.addEventListener('click', (e) => {
         const panel = document.getElementById('notificationPanel');
         const bellBtn = document.getElementById('notificationBellBtn');
-        if (panel.style.display === 'flex' && !panel.contains(e.target) && !bellBtn.contains(e.target)) {
-            panel.style.display = 'none';
+        const bottomNotifBtn = document.getElementById('bottomNotifBtn');
+        
+        if (panel && panel.style.display === 'flex') {
+            const clickedBell = bellBtn && bellBtn.contains(e.target);
+            const clickedBottomNavNotif = bottomNotifBtn && bottomNotifBtn.contains(e.target);
+            const clickedInsidePanel = panel.contains(e.target);
+            
+            if (!clickedInsidePanel && !clickedBell && !clickedBottomNavNotif) {
+                panel.style.display = 'none';
+            }
         }
     });
 
-    // Add Profile Buttons
-    document.getElementById('addProfileBtn').addEventListener('click', () => openModal());
-    document.getElementById('addFirstProfileBtn').addEventListener('click', () => openModal());
 
     // --- Bottom Nav Event Listeners ---
     const bottomNavItems = document.querySelectorAll('.bottom-nav-item[data-tab]');
@@ -451,6 +466,13 @@ function setupEventListeners() {
                 showToast('Please login to create a post', 'info');
                 document.getElementById('loginBtn').click();
             }
+        });
+    }
+
+    const userAvatar = document.getElementById('userAvatar');
+    if (userAvatar) {
+        userAvatar.addEventListener('click', () => {
+            if (currentUser) switchTab('my-profile');
         });
     }
 
@@ -497,51 +519,9 @@ function setupEventListeners() {
 
     // Blog Buttons — visible to everyone, but guests are prompted to register
     const newBlogBtn = document.getElementById('newBlogBtn');
-    if (newBlogBtn) newBlogBtn.addEventListener('click', () => {
-        if (!currentUser) {
-            // Guest: open login modal on the Register tab with a hint
-            const loginModal = document.getElementById('loginModal');
-            const registerTab = document.getElementById('showRegisterTab');
-            if (loginModal) loginModal.classList.add('active');
-            if (registerTab) registerTab.click(); // switch to Register tab
-            showToast('Please register or log in to create a post.', 'error');
-            return;
-        }
+    if (newBlogBtn) newBlogBtn.addEventListener('click', openBlogModal);
 
-        const form = document.getElementById('blogForm');
-        form.reset();
-        form.removeAttribute('data-edit-id');
-
-        document.getElementById('blogModal').classList.add('active');
-
-        // Restore Draft
-        const savedDraft = localStorage.getItem('draft_blog');
-        if (savedDraft) {
-            try {
-                const draft = JSON.parse(savedDraft);
-                const titleInput = document.getElementById('blogTitleInput');
-                const tagsInput = document.getElementById('blogTagsInput');
-                const contentInput = document.getElementById('blogContentInput');
-
-                if (titleInput && draft.title) titleInput.value = draft.title;
-                if (tagsInput && draft.tags) tagsInput.value = draft.tags;
-                if (contentInput && draft.content) contentInput.value = draft.content;
-
-                if (window.innerWidth > 1024) {
-                    updateBlogPreview();
-                }
-            } catch (e) {
-                console.error('Failed to restore draft', e);
-            }
-        } else {
-            // explicitly clear preview if no draft
-            if (window.innerWidth > 1024 && typeof updateBlogPreview === 'function') {
-                updateBlogPreview();
-            }
-        }
-
-        document.getElementById('blogTitleInput').focus();
-    });
+    // Modal Controls
 
     document.getElementById('closeBlogModal').addEventListener('click', closeBlogModal);
     document.getElementById('cancelBlogBtn').addEventListener('click', closeBlogModal);
@@ -1211,6 +1191,13 @@ function closeChangePasswordModal() {
     document.getElementById('changePasswordError').style.display = 'none';
 }
 
+function validatePassword(password) {
+    if (password.length < 8) return "Password must be at least 8 characters long";
+    if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+    return null;
+}
+
 async function handleChangePassword(e) {
     e.preventDefault();
     const currentPassword = document.getElementById('currentPassword').value;
@@ -1225,8 +1212,9 @@ async function handleChangePassword(e) {
         return;
     }
 
-    if (newPassword.length < 6) {
-        errorEl.textContent = 'Password must be at least 6 characters long';
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
         errorEl.style.display = 'block';
         return;
     }
@@ -1321,6 +1309,13 @@ async function handleRegister(e) {
     const errorEl = document.getElementById('registerError');
     const submitBtn = document.getElementById('submitRegisterBtn');
 
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
+        errorEl.style.display = 'block';
+        return;
+    }
+
     submitBtn.classList.add('loading');
     errorEl.style.display = 'none';
 
@@ -1363,9 +1358,7 @@ function updateUIForRole(switchView = true) {
     const logoutBtn = document.getElementById('logoutBtn');
     const adminBadge = document.getElementById('adminBadge');
     const changePasswordBtn = document.getElementById('changePasswordBtn');
-    const addProfileBtn = document.getElementById('addProfileBtn');
     const mainNavTabs = document.getElementById('mainNavTabs');
-    const adminProfilesTab = document.getElementById('adminProfilesTab');
     const userProfileTab = document.getElementById('userProfileTab');
     const newBlogBtn = document.getElementById('newBlogBtn');
     const userAvatar = document.getElementById('userAvatar');
@@ -1378,7 +1371,6 @@ function updateUIForRole(switchView = true) {
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
         if (notificationBellWrap) notificationBellWrap.style.display = 'block';
-        if (isCapacitor && mobileBottomNav) mobileBottomNav.style.display = 'flex';
         mainNavTabs.style.display = 'flex';
 
         // Update Header Avatar
@@ -1402,19 +1394,11 @@ function updateUIForRole(switchView = true) {
 
         if (currentUser.user.role === 'admin') {
             if (adminBadge) adminBadge.style.display = 'flex';
-            if (addProfileBtn) addProfileBtn.style.display = 'flex';
-            if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
-            if (userProfileTab) userProfileTab.style.display = 'none';
-            if (bottomProfilesTab) bottomProfilesTab.style.display = 'flex';
-            if (bottomProfileTab) bottomProfileTab.style.display = 'none';
         } else {
             if (adminBadge) adminBadge.style.display = 'none';
-            if (addProfileBtn) addProfileBtn.style.display = 'none';
-            if (adminProfilesTab) adminProfilesTab.style.display = 'none';
-            if (userProfileTab) userProfileTab.style.display = 'flex';
-            if (bottomProfilesTab) bottomProfilesTab.style.display = 'none';
-            if (bottomProfileTab) bottomProfileTab.style.display = 'flex';
         }
+        if (userProfileTab) userProfileTab.style.display = 'flex';
+        
         // All logged-in users can create posts
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
         if (switchView) switchTab('blogs');
@@ -1425,9 +1409,6 @@ function updateUIForRole(switchView = true) {
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
         if (notificationBellWrap) notificationBellWrap.style.display = 'none';
-        if (mobileBottomNav) mobileBottomNav.style.display = 'none';
-        if (addProfileBtn) addProfileBtn.style.display = 'none';
-        if (userAvatar) userAvatar.style.display = 'none';
         mainNavTabs.style.display = 'none';
 
         // Clear notification polling
@@ -1439,6 +1420,55 @@ function updateUIForRole(switchView = true) {
         // Guests can see blogs and are shown New Post to encourage registration
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
         if (switchView) switchTab('blogs');
+    }
+
+    if (isCapacitor && mobileBottomNav) {
+        mobileBottomNav.style.display = 'flex';
+        // Hide specific buttons if not logged in
+        const bottomNewPostBtn = document.getElementById('bottomNewPostBtn');
+        const bottomNotifBtn = document.getElementById('bottomNotifBtn');
+        if (bottomNewPostBtn) bottomNewPostBtn.style.display = currentUser ? 'flex' : 'none';
+        if (bottomNotifBtn) bottomNotifBtn.style.display = currentUser ? 'flex' : 'none';
+    }
+}
+
+function openBlogModal() {
+    if (!currentUser) {
+        // Guest: open login modal on the Register tab with a hint
+        const loginModal = document.getElementById('loginModal');
+        const registerTab = document.getElementById('showRegisterTab');
+        if (loginModal) loginModal.classList.add('active');
+        if (registerTab) registerTab.click(); // switch to Register tab
+        showToast('Please register or log in to create a post.', 'error');
+        return;
+    }
+
+    const form = document.getElementById('blogForm');
+    if (form) {
+        form.reset();
+        form.removeAttribute('data-edit-id');
+    }
+
+    const modal = document.getElementById('blogModal');
+    if (modal) modal.classList.add('active');
+
+    // Restore Draft
+    const savedDraft = localStorage.getItem('draft_blog');
+    if (savedDraft) {
+        try {
+            const draft = JSON.parse(savedDraft);
+            const titleInput = document.getElementById('blogTitleInput');
+            const tagsInput = document.getElementById('blogTagsInput');
+            const contentInput = document.getElementById('blogContentInput');
+
+            if (titleInput && draft.title) titleInput.value = draft.title;
+            if (tagsInput && draft.tags) tagsInput.value = draft.tags;
+            if (contentInput && draft.content) contentInput.value = draft.content;
+
+            if (typeof updateBlogPreview === 'function') updateBlogPreview();
+        } catch (e) {
+            console.error('Error restoring draft:', e);
+        }
     }
 }
 
@@ -1530,8 +1560,22 @@ async function handleResetPassword(e) {
     const email = document.getElementById('resetEmail').value;
     const token = document.getElementById('resetToken').value.trim();
     const newPassword = document.getElementById('resetNewPassword').value.trim();
+    const confirmPassword = document.getElementById('resetConfirmPassword').value;
     const errorEl = document.getElementById('resetError');
     const submitBtn = document.getElementById('submitResetBtn');
+
+    if (newPassword !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
+        errorEl.style.display = 'block';
+        return;
+    }
 
     submitBtn.classList.add('loading');
     errorEl.style.display = 'none';
@@ -1918,24 +1962,24 @@ function renderBlogs(blogs) {
                 <div class="blog-card-content">
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
                         <div class="author-avatar-sm" style="width: 48px; height: 48px; font-size: 1.1rem; flex-shrink: 0;">${getInitials(blog.author.name)}</div>
-                        <div style="flex: 1; min-width: 0;">
-                            <h4 style="margin: 0; font-size: 1rem; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(blog.author.name)}</h4>
-                            <span style="font-size: 0.8rem; color: var(--color-text-muted);">${new Date(blog.createdAt).toLocaleDateString()}</span>
+                        <div style="flex: 1; min-width: 0; overflow: hidden;">
+                            <h4 style="margin: 0; font-size: 0.95rem; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">${escapeHtml(blog.author.name)}</h4>
+                            <span style="font-size: 0.75rem; color: var(--color-text-muted);">${new Date(blog.createdAt).toLocaleDateString()}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
                             ${currentUser && !isAuthor ? `
-                            <button class="follow-btn ${blog.author.isFollowedByCurrentUser ? 'following' : ''}"
-                                id="follow-btn-${blog.author.id}"
-                                onclick="toggleFollow('${blog.author.id}', this)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
-                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                                    <circle cx="8.5" cy="7" r="4"/>
-                                    ${blog.author.isFollowedByCurrentUser
-                                        ? `<polyline points="17 11 19 13 23 9"/>`
-                                        : `<line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`}
-                                </svg>
-                                ${blog.author.isFollowedByCurrentUser ? 'Following' : 'Follow'}
-                            </button>` : ''}
+                                    <button class="follow-btn ${blog.author.isFollowedByCurrentUser ? 'following' : ''}"
+                                        id="follow-btn-${blog.author.id}"
+                                        onclick="toggleFollow('${blog.author.id}', this)">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="8.5" cy="7" r="4"/>
+                                            ${blog.author.isFollowedByCurrentUser
+                                                ? `<polyline points="17 11 19 13 23 9"/>`
+                                                : `<line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`}
+                                        </svg>
+                                        <span class="follow-label">${blog.author.isFollowedByCurrentUser ? 'Following' : 'Follow'}</span>
+                                    </button>` : ''}
                             ${canEditOrDelete ? `
                             <button class="btn btn-secondary btn-icon blog-action-btn" title="Edit post" onclick="editBlogPost('${blog._id}')">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -2147,6 +2191,19 @@ function renderMyProfile(profile) {
                         </div>
                     ` : ''}
                 </div>
+
+                ${((profile.role && profile.role.toLowerCase() === 'admin') || (currentUser && currentUser.user && currentUser.user.role === 'admin')) ? `
+                <div style="margin-top: 1rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem;">
+                    <button class="btn btn-secondary" onclick="switchTab('profiles')" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border-style: dashed; background: var(--color-bg-tertiary);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <circle cx="12" cy="12" r="10" />
+                        </svg>
+                        Admin: See All Registered Profiles
+                    </button>
+                </div>
+                ` : ''}
 
                 <div class="my-profile-actions">
                     <button class="btn btn-primary" onclick="document.getElementById('newBlogBtn').click()">

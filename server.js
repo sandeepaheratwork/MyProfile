@@ -223,6 +223,13 @@ async function comparePassword(password, hash) {
     return await bcrypt.compare(password, hash);
 }
 
+function validatePassword(password) {
+    if (password.length < 8) return "Password must be at least 8 characters long";
+    if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+    return null;
+}
+
 // Middleware
 const checkAdminRole = (req, res, next) => {
     const token = req.headers['x-auth-token'];
@@ -566,6 +573,11 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Name, email and password are required' });
         }
 
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            return res.status(400).json({ success: false, error: passwordError });
+        }
+
         const collection = await getProfilesCollection();
 
         // Check if user already exists
@@ -646,6 +658,11 @@ app.post('/api/change-password', async (req, res) => {
 
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ success: false, error: 'Both current and new passwords are required' });
+        }
+
+        const passwordError = validatePassword(newPassword);
+        if (passwordError) {
+            return res.status(400).json({ success: false, error: `New password: ${passwordError}` });
         }
 
         const collection = await getProfilesCollection();
@@ -1511,6 +1528,15 @@ app.post('/api/forgot-password', async (req, res) => {
 app.post('/api/reset-password', async (req, res) => {
     try {
         const { email, token, newPassword } = req.body;
+
+        if (!email || !token || !newPassword) {
+            return res.status(400).json({ success: false, error: 'Email, token and new password are required' });
+        }
+
+        const passwordError = validatePassword(newPassword);
+        if (passwordError) {
+            return res.status(400).json({ success: false, error: passwordError });
+        }
         const collection = await getProfilesCollection();
 
         const user = await collection.findOne({
