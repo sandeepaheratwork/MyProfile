@@ -4,8 +4,8 @@
  */
 
 // API Base URL
-// Check strictly for http://localhost (no port string) to avoid blocking local webdev envs (e.g http://localhost:3001)
-const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'capacitor://localhost';
+// Check strictly for localhost without port string to avoid blocking local webdev envs (e.g http://localhost:3001)
+const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'https://localhost' || window.location.origin === 'capacitor://localhost';
 const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
 const API_URL = `${API_BASE_URL}/api/profiles`;
 
@@ -99,7 +99,109 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Listen for back/forward buttons
     window.addEventListener('hashchange', handleRouting);
+
+    // Initialize native-feel Pull To Refresh on Mobile
+    if (typeof PullToRefresh !== 'undefined' && isCapacitor) {
+        PullToRefresh.init({
+            mainElement: 'body',
+            onRefresh() {
+                return new Promise(async (resolve) => {
+                    try {
+                        const loadingTasks = [];
+                        if (typeof loadBlogs === 'function') loadingTasks.push(loadBlogs());
+                        if (typeof loadProfiles === 'function' && currentUser && currentUser.user && currentUser.user.role === 'admin') {
+                            loadingTasks.push(loadProfiles());
+                        }
+                        await Promise.all(loadingTasks);
+                    } catch (e) { console.error('Refresh error', e); }
+                    resolve();
+                });
+            }
+        });
+    }
+
+    // Register for push notifications after login (called from updateUIForRole too)
+    initPushNotifications();
 });
+
+// ======================================================
+// Push Notification Registration
+// ======================================================
+
+async function initPushNotifications() {
+    if (!currentUser) return; // Only register when logged in
+
+    try {
+        // --- Mobile (Capacitor) ---
+        if (isCapacitor && window.Capacitor?.Plugins?.PushNotifications) {
+            const { PushNotifications } = window.Capacitor.Plugins;
+
+            const permResult = await PushNotifications.requestPermissions();
+            if (permResult.receive === 'granted') {
+                await PushNotifications.register();
+
+                PushNotifications.addListener('registration', async (tokenData) => {
+                    console.log('FCM Token:', tokenData.value);
+                    try {
+                        await fetch(`${API_BASE_URL}/api/notifications/fcm-token`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-auth-token': currentUser.token },
+                            body: JSON.stringify({
+                                fcmToken: tokenData.value,
+                                platform: window.Capacitor.getPlatform()
+                            })
+                        });
+                    } catch (e) { console.warn('Failed to save FCM token', e); }
+                });
+
+                PushNotifications.addListener('pushNotificationReceived', (notification) => {
+                    showToast(`🔔 ${notification.title}: ${notification.body}`, 'info');
+                });
+
+                PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+                    const url = action.notification?.data?.url;
+                    if (url) window.location.hash = url.replace(/^.*#/, '#');
+                });
+            }
+        }
+
+        // --- Web Browser (Service Worker + VAPID) ---
+        if (!isCapacitor && 'serviceWorker' in navigator && 'PushManager' in window) {
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+
+            // Get VAPID public key from server
+            const keyRes = await fetch(`${API_BASE_URL}/api/notifications/vapid-public-key`);
+            const keyData = await keyRes.json();
+            if (!keyData.publicKey) return;
+
+            const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
+            let subscription = await reg.pushManager.getSubscription();
+
+            if (!subscription) {
+                subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+            }
+
+            // Save to backend
+            await fetch(`${API_BASE_URL}/api/notifications/web-subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': currentUser.token },
+                body: JSON.stringify({ subscription })
+            });
+
+            console.log('✅ Web Push registered');
+        }
+    } catch (e) {
+        console.warn('Push notification init failed:', e.message);
+    }
+}
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
 
 function setupEventListeners() {
     // Login/Logout/Register Buttons
@@ -930,9 +1032,13 @@ function switchTab(tabId, pushState = true) {
     profilesSection.style.display = 'none';
     searchSection.style.display = 'none';
     myProfileSection.style.display = 'none';
+    
+    const blogStickyHeader = document.getElementById('blogStickyHeader');
+    if (blogStickyHeader) blogStickyHeader.style.display = 'none';
 
     if (tabId === 'blogs') {
         blogsSection.style.display = 'block';
+        if (blogStickyHeader) blogStickyHeader.style.display = 'flex';
         loadBlogs();
     } else if (tabId === 'profiles') {
         profilesSection.style.display = 'block';
@@ -1031,6 +1137,9 @@ async function handleLogin(e) {
 
             closeLoginModal();
             updateUIForRole();
+
+            // Register for push notifications now that we have a valid session
+            initPushNotifications();
 
             // All users now start on blogs by default
             switchTab('blogs');
@@ -1622,22 +1731,33 @@ function renderBlogs(blogs) {
 
         return `
             <div class="blog-card" style="cursor: default;" id="blog-${blog._id}">
-                ${canEditOrDelete ? `
-                <div class="blog-card-actions">
-                    <button class="btn btn-secondary btn-icon blog-action-btn" title="Edit post" onclick="editBlogPost('${blog._id}')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    </button>
-                    <button class="btn btn-danger btn-icon blog-action-btn" title="Delete post" onclick="deleteBlogPost('${blog._id}', this)">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/></svg>
-                    </button>
-                </div>` : ''}
-                
                 <div class="blog-card-content">
-                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-                        <div class="author-avatar-sm" style="width: 48px; height: 48px; font-size: 1.1rem;">${getInitials(blog.author.name)}</div>
-                        <div>
-                            <h4 style="margin: 0; font-size: 1rem; color: var(--color-text-primary);">${escapeHtml(blog.author.name)}</h4>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                        <div class="author-avatar-sm" style="width: 48px; height: 48px; font-size: 1.1rem; flex-shrink: 0;">${getInitials(blog.author.name)}</div>
+                        <div style="flex: 1; min-width: 0;">
+                            <h4 style="margin: 0; font-size: 1rem; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(blog.author.name)}</h4>
                             <span style="font-size: 0.8rem; color: var(--color-text-muted);">${new Date(blog.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
+                            ${currentUser && !isAuthor ? `
+                            <button class="follow-btn ${blog.author.followers && blog.author.followers.includes(currentUser.user.id) ? 'following' : ''}"
+                                id="follow-btn-${blog.author.id}"
+                                onclick="toggleFollow('${blog.author.id}', this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="8.5" cy="7" r="4"/>
+                                    <line x1="20" y1="8" x2="20" y2="14"/>
+                                    <line x1="23" y1="11" x2="17" y2="11"/>
+                                </svg>
+                                ${blog.author.followers && blog.author.followers.includes(currentUser.user.id) ? 'Following' : 'Follow'}
+                            </button>` : ''}
+                            ${canEditOrDelete ? `
+                            <button class="btn btn-secondary btn-icon blog-action-btn" title="Edit post" onclick="editBlogPost('${blog._id}')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <button class="btn btn-danger btn-icon blog-action-btn" title="Delete post" onclick="deleteBlogPost('${blog._id}', this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/></svg>
+                            </button>` : ''}
                         </div>
                     </div>
 
@@ -2608,6 +2728,52 @@ function scrollChatToBottom() {
 // ========================================
 // Blog Interaction Functions
 // ========================================
+
+async function toggleFollow(userId, btnObj) {
+    if (!currentUser) {
+        showToast('Please log in to follow users', 'warning');
+        return;
+    }
+
+    try {
+        btnObj.disabled = true;
+        const response = await fetch(`${API_BASE_URL}/api/users/${userId}/follow`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            const isNowFollowing = data.following;
+            btnObj.classList.toggle('following', isNowFollowing);
+
+            // Update button icon and text
+            btnObj.innerHTML = isNowFollowing
+                ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg> Following`
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Follow`;
+
+            // Update all follow buttons for this user across the feed
+            document.querySelectorAll(`[id="follow-btn-${userId}"]`).forEach(btn => {
+                if (btn !== btnObj) {
+                    btn.classList.toggle('following', isNowFollowing);
+                    btn.innerHTML = btnObj.innerHTML;
+                }
+            });
+
+            showToast(isNowFollowing ? 'You are now following this user!' : 'Unfollowed', isNowFollowing ? 'success' : 'info');
+        } else {
+            showToast(data.error || 'Could not update follow status', 'error');
+        }
+    } catch (err) {
+        console.error('Follow error:', err);
+        showToast('Connection error', 'error');
+    } finally {
+        if (btnObj) btnObj.disabled = false;
+    }
+}
 
 async function toggleLike(blogId, btnObj) {
     if (!currentUser) {

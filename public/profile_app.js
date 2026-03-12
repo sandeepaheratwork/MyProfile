@@ -3,8 +3,8 @@
  */
 
 // API Base URL
-// Check strictly for http://localhost (no port string) to avoid blocking local webdev envs (e.g http://localhost:3001)
-const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'capacitor://localhost';
+// Check strictly for localhost without port string to avoid blocking local webdev envs (e.g http://localhost:3001)
+const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'https://localhost' || window.location.origin === 'capacitor://localhost';
 const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
 const API_URL = `${API_BASE_URL}/api/profiles`;
 
@@ -49,6 +49,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadProfile(profileId);
     } else {
         showError('No profile ID specified');
+    }
+
+    // Initialize native-feel Pull To Refresh on Mobile
+    if (typeof PullToRefresh !== 'undefined' && isCapacitor) {
+        PullToRefresh.init({
+            mainElement: 'body',
+            onRefresh() {
+                return new Promise(async (resolve) => {
+                    try {
+                        if (profileId) await loadProfile(profileId);
+                    } catch (e) {
+                        console.error('Refresh error', e); 
+                    }
+                    resolve();
+                });
+            }
+        });
     }
 });
 
