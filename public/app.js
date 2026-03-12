@@ -1191,6 +1191,13 @@ function closeChangePasswordModal() {
     document.getElementById('changePasswordError').style.display = 'none';
 }
 
+function validatePassword(password) {
+    if (password.length < 8) return "Password must be at least 8 characters long";
+    if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+    return null;
+}
+
 async function handleChangePassword(e) {
     e.preventDefault();
     const currentPassword = document.getElementById('currentPassword').value;
@@ -1205,8 +1212,9 @@ async function handleChangePassword(e) {
         return;
     }
 
-    if (newPassword.length < 6) {
-        errorEl.textContent = 'Password must be at least 6 characters long';
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
         errorEl.style.display = 'block';
         return;
     }
@@ -1300,6 +1308,13 @@ async function handleRegister(e) {
     const password = document.getElementById('regPassword').value;
     const errorEl = document.getElementById('registerError');
     const submitBtn = document.getElementById('submitRegisterBtn');
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
+        errorEl.style.display = 'block';
+        return;
+    }
 
     submitBtn.classList.add('loading');
     errorEl.style.display = 'none';
@@ -1545,8 +1560,22 @@ async function handleResetPassword(e) {
     const email = document.getElementById('resetEmail').value;
     const token = document.getElementById('resetToken').value.trim();
     const newPassword = document.getElementById('resetNewPassword').value.trim();
+    const confirmPassword = document.getElementById('resetConfirmPassword').value;
     const errorEl = document.getElementById('resetError');
     const submitBtn = document.getElementById('submitResetBtn');
+
+    if (newPassword !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+        errorEl.textContent = passwordError;
+        errorEl.style.display = 'block';
+        return;
+    }
 
     submitBtn.classList.add('loading');
     errorEl.style.display = 'none';
