@@ -70,18 +70,21 @@ if (typeof marked !== 'undefined') {
 // ========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (isCapacitor && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-        try {
-            const StatusBar = window.Capacitor.Plugins.StatusBar;
-            await StatusBar.setStyle({ style: 'DARK' });
-            if (window.Capacitor.getPlatform() === 'android') {
-                await StatusBar.setBackgroundColor({ color: '#ffffff' });
-                await StatusBar.setOverlaysWebView({ overlay: false });
-            } else {
-                await StatusBar.setOverlaysWebView({ overlay: true });
+    if (isCapacitor) {
+        document.body.classList.add('is-native-app');
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+            try {
+                const StatusBar = window.Capacitor.Plugins.StatusBar;
+                await StatusBar.setStyle({ style: 'DARK' });
+                if (window.Capacitor.getPlatform() === 'android') {
+                    await StatusBar.setBackgroundColor({ color: '#ffffff' });
+                    await StatusBar.setOverlaysWebView({ overlay: false });
+                } else {
+                    await StatusBar.setOverlaysWebView({ overlay: true });
+                }
+            } catch (e) {
+                console.log('Error initializing StatusBar', e);
             }
-        } catch (e) {
-            console.log('Error initializing StatusBar', e);
         }
     }
 
@@ -242,11 +245,18 @@ async function fetchNotifications() {
 
 function updateNotifBadge(count) {
     const badge = document.getElementById('notifBadge');
-    if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : count;
-        badge.style.display = 'flex';
-    } else {
-        badge.style.display = 'none';
+    const badgeBottom = document.getElementById('notifBadgeBottom');
+    
+    const text = count > 99 ? '99+' : count;
+    
+    if (badge) {
+        badge.textContent = text;
+        badge.style.display = count > 0 ? 'flex' : 'none';
+    }
+    
+    if (badgeBottom) {
+        badgeBottom.textContent = text;
+        badgeBottom.style.display = count > 0 ? 'flex' : 'none';
     }
 }
 
@@ -421,6 +431,28 @@ function setupEventListeners() {
     // Add Profile Buttons
     document.getElementById('addProfileBtn').addEventListener('click', () => openModal());
     document.getElementById('addFirstProfileBtn').addEventListener('click', () => openModal());
+
+    // --- Bottom Nav Event Listeners ---
+    const bottomNavItems = document.querySelectorAll('.bottom-nav-item[data-tab]');
+    bottomNavItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const tab = item.dataset.tab;
+            switchTab(tab);
+        });
+    });
+
+    const bottomNewPostBtn = document.getElementById('bottomNewPostBtn');
+    if (bottomNewPostBtn) {
+        bottomNewPostBtn.addEventListener('click', () => {
+            if (currentUser) {
+                switchTab('blogs');
+                openBlogModal();
+            } else {
+                showToast('Please login to create a post', 'info');
+                document.getElementById('loginBtn').click();
+            }
+        });
+    }
 
     // Modal Controls
     document.getElementById('closeModal').addEventListener('click', closeModal);
@@ -1137,7 +1169,7 @@ function switchTab(tabId, pushState = true) {
     const myProfileSection = document.getElementById('myProfileSection');
 
     // Update active class on nav tabs
-    const tabs = document.querySelectorAll('.nav-tab');
+    const tabs = document.querySelectorAll('.nav-tab, .bottom-nav-item[data-tab]');
     tabs.forEach(tab => {
         if (tab.dataset.tab === tabId) {
             tab.classList.add('active');
@@ -1338,12 +1370,14 @@ function updateUIForRole(switchView = true) {
     const newBlogBtn = document.getElementById('newBlogBtn');
     const userAvatar = document.getElementById('userAvatar');
     const notificationBellWrap = document.getElementById('notificationBellWrap');
+    const mobileBottomNav = document.getElementById('mobileBottomNav');
 
     if (currentUser) {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
         if (notificationBellWrap) notificationBellWrap.style.display = 'block';
+        if (mobileBottomNav) mobileBottomNav.style.display = 'flex';
         mainNavTabs.style.display = 'flex';
 
         // Update Header Avatar
@@ -1362,16 +1396,23 @@ function updateUIForRole(switchView = true) {
             notifPollingInterval = setInterval(fetchNotifications, 60000); // Poll every minute
         }
 
+        const bottomProfilesTab = document.getElementById('bottomProfilesTab');
+        const bottomProfileTab = document.getElementById('bottomProfileTab');
+
         if (currentUser.user.role === 'admin') {
             if (adminBadge) adminBadge.style.display = 'flex';
             if (addProfileBtn) addProfileBtn.style.display = 'flex';
             if (adminProfilesTab) adminProfilesTab.style.display = 'flex';
             if (userProfileTab) userProfileTab.style.display = 'none';
+            if (bottomProfilesTab) bottomProfilesTab.style.display = 'flex';
+            if (bottomProfileTab) bottomProfileTab.style.display = 'none';
         } else {
             if (adminBadge) adminBadge.style.display = 'none';
             if (addProfileBtn) addProfileBtn.style.display = 'none';
             if (adminProfilesTab) adminProfilesTab.style.display = 'none';
             if (userProfileTab) userProfileTab.style.display = 'flex';
+            if (bottomProfilesTab) bottomProfilesTab.style.display = 'none';
+            if (bottomProfileTab) bottomProfileTab.style.display = 'flex';
         }
         // All logged-in users can create posts
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
@@ -1383,6 +1424,7 @@ function updateUIForRole(switchView = true) {
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
         if (notificationBellWrap) notificationBellWrap.style.display = 'none';
+        if (mobileBottomNav) mobileBottomNav.style.display = 'none';
         if (addProfileBtn) addProfileBtn.style.display = 'none';
         if (userAvatar) userAvatar.style.display = 'none';
         mainNavTabs.style.display = 'none';
