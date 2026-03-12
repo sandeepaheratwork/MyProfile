@@ -1274,7 +1274,9 @@ async function loadBlogs() {
     blogsGrid.innerHTML = generateSkeletons(3, 'blog');
 
     try {
-        const response = await fetch(API_BASE_URL + '/api/blogs');
+        const headers = {};
+        if (currentUser) headers['x-auth-token'] = currentUser.token;
+        const response = await fetch(API_BASE_URL + '/api/blogs', { headers });
         const data = await response.json();
 
         if (data.success) {
@@ -1740,16 +1742,17 @@ function renderBlogs(blogs) {
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;">
                             ${currentUser && !isAuthor ? `
-                            <button class="follow-btn ${blog.author.followers && blog.author.followers.includes(currentUser.user.id) ? 'following' : ''}"
+                            <button class="follow-btn ${blog.author.isFollowedByCurrentUser ? 'following' : ''}"
                                 id="follow-btn-${blog.author.id}"
                                 onclick="toggleFollow('${blog.author.id}', this)">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
                                     <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                                     <circle cx="8.5" cy="7" r="4"/>
-                                    <line x1="20" y1="8" x2="20" y2="14"/>
-                                    <line x1="23" y1="11" x2="17" y2="11"/>
+                                    ${blog.author.isFollowedByCurrentUser
+                                        ? `<polyline points="17 11 19 13 23 9"/>`
+                                        : `<line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`}
                                 </svg>
-                                ${blog.author.followers && blog.author.followers.includes(currentUser.user.id) ? 'Following' : 'Follow'}
+                                ${blog.author.isFollowedByCurrentUser ? 'Following' : 'Follow'}
                             </button>` : ''}
                             ${canEditOrDelete ? `
                             <button class="btn btn-secondary btn-icon blog-action-btn" title="Edit post" onclick="editBlogPost('${blog._id}')">

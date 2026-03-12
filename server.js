@@ -28,14 +28,28 @@ let firebaseAdmin = null;
 try {
     const admin = require('firebase-admin');
     const fs = require('fs');
-    const saPath = path.join(__dirname, 'firebase-service-account.json');
-    if (fs.existsSync(saPath)) {
-        const serviceAccount = require(saPath);
+
+    let serviceAccount = null;
+
+    // Cloud Run: pass credentials as env var (JSON string)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        console.log('✅ Firebase Admin: using FIREBASE_SERVICE_ACCOUNT env var');
+    } else {
+        // Local dev: load from file
+        const saPath = path.join(__dirname, 'firebase-service-account.json');
+        if (fs.existsSync(saPath)) {
+            serviceAccount = require(saPath);
+            console.log('✅ Firebase Admin: using firebase-service-account.json');
+        }
+    }
+
+    if (serviceAccount) {
         admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
         firebaseAdmin = admin;
         console.log('✅ Firebase Admin initialized for push notifications');
     } else {
-        console.warn('⚠️  firebase-service-account.json not found — mobile push disabled');
+        console.warn('⚠️  No Firebase credentials found — mobile push disabled');
     }
 } catch (e) {
     console.warn('⚠️  Firebase Admin init failed:', e.message);
@@ -1073,8 +1087,50 @@ app.get('/api/tags/search', async (req, res) => {
 // List all blogs
 app.get('/api/blogs', async (req, res) => {
     try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token); // null if not logged in — that's fine
+        const currentUserId = session?.userId || null;
+
         const collection = await getBlogsCollection();
         const blogs = await collection.find({}).sort({ createdAt: -1 }).toArray();
+
+        // Enrich each blog with live author followers so the Follow button
+        // knows its correct state on every page load/refresh
+        if (blogs.length > 0) {
+            const profilesCol = await getProfilesCollection();
+
+            // Collect unique author IDs
+            const authorIds = [...new Set(
+                blogs
+                    .map(b => b.author?.id)
+                    .filter(id => id)
+                    .map(id => { try { return new ObjectId(id); } catch { return null; } })
+                    .filter(Boolean)
+            )];
+
+            if (authorIds.length > 0) {
+                const authorProfiles = await profilesCol.find(
+                    { _id: { $in: authorIds } },
+                    { projection: { followers: 1 } }
+                ).toArray();
+
+                const followersMap = {};
+                authorProfiles.forEach(p => { followersMap[p._id.toString()] = p.followers || []; });
+
+                blogs.forEach(blog => {
+                    if (blog.author?.id) {
+                        const followers = followersMap[blog.author.id] || [];
+                        blog.author.followers = followers;
+                        blog.author.followersCount = followers.length;
+                        // Convenience flag so frontend doesn't need to decode
+                        blog.author.isFollowedByCurrentUser = currentUserId
+                            ? followers.includes(currentUserId)
+                            : false;
+                    }
+                });
+            }
+        }
+
         res.json({ success: true, blogs, count: blogs.length });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
