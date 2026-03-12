@@ -1372,12 +1372,13 @@ function updateUIForRole(switchView = true) {
     const notificationBellWrap = document.getElementById('notificationBellWrap');
     const mobileBottomNav = document.getElementById('mobileBottomNav');
 
+    document.body.classList.toggle('is-logged-in', !!currentUser);
     if (currentUser) {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
         if (notificationBellWrap) notificationBellWrap.style.display = 'block';
-        if (mobileBottomNav) mobileBottomNav.style.display = 'flex';
+        if (isCapacitor && mobileBottomNav) mobileBottomNav.style.display = 'flex';
         mainNavTabs.style.display = 'flex';
 
         // Update Header Avatar

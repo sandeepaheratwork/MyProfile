@@ -1240,18 +1240,28 @@ body {
         gap: var(--spacing-sm);
     }
 
-    /* ONLY for Native Mobile App: Hide top tabs and show bottom bar */
-    body.is-native-app .nav-tabs {
+    /* ONLY for Native Mobile App when Logged In: Hide top tabs, actions and show refined bottom bar */
+    body.is-native-app.is-logged-in .nav-tabs,
+    body.is-native-app.is-logged-in .header-actions #userAvatar,
+    body.is-native-app.is-logged-in .header-actions #notificationBellWrap,
+    body.is-native-app.is-logged-in .header-actions #addProfileBtn,
+    body.is-native-app.is-logged-in .header-actions #logoutBtn,
+    body.is-native-app.is-logged-in .header-actions #changePasswordBtn,
+    body.is-native-app.is-logged-in #newBlogBtn {
         display: none !important;
     }
 
     body.is-native-app .mobile-bottom-nav {
+        display: none; /* Controlled by is-logged-in class via JS if needed, but flex is better */
+    }
+
+    body.is-native-app.is-logged-in .mobile-bottom-nav {
         display: flex !important;
     }
 
     /* ONLY for Native Mobile App: Adjust body padding so content isn't hidden behind bottom bar */
-    body.is-native-app {
-        padding-bottom: 70px;
+    body.is-native-app.is-logged-in {
+        padding-bottom: calc(65px + env(safe-area-inset-bottom));
     }
 
     .main-content {
@@ -1260,43 +1270,15 @@ body {
         overflow-x: hidden;
     }
 
-    .search-shortcut {
-        display: none;
-    }
-
-    .profiles-grid,
-    .blogs-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .blog-card-image {
-        height: 200px;
-    }
-
-    .profile-actions {
-        opacity: 1;
-    }
-
-    .profile-stats {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md) 0;
-    }
-
-    .stat-item {
-        align-items: center;
-        text-align: center;
-    }
-
-    .modal {
-        max-width: calc(100% - 2rem);
-        margin: 1rem;
-        max-height: calc(100vh - 2rem);
-    }
-
-    #blogContentInput {
-        height: 200px !important;
-    }
+    /* ... omitted existing media query rules for brevity but keeping them intact ... */
+    .search-shortcut { display: none; }
+    .profiles-grid, .blogs-grid { grid-template-columns: 1fr; }
+    .blog-card-image { height: 200px; }
+    .profile-actions { opacity: 1; }
+    .profile-stats { grid-template-columns: 1fr; gap: var(--spacing-md); padding: var(--spacing-md) 0; }
+    .stat-item { align-items: center; text-align: center; }
+    .modal { max-width: calc(100% - 2rem); margin: 1rem; max-height: calc(100vh - 2rem); }
+    #blogContentInput { height: 200px !important; }
 
     /* For Mobile Web (not native app): Allow horizontal scrolling for top tabs */
     body:not(.is-native-app) .nav-tabs {
@@ -1309,9 +1291,7 @@ body {
         gap: 0;
     }
 
-    body:not(.is-native-app) .nav-tabs::-webkit-scrollbar {
-        display: none;
-    }
+    body:not(.is-native-app) .nav-tabs::-webkit-scrollbar { display: none; }
 
     body:not(.is-native-app) .nav-tab {
         flex: 0 0 auto;
@@ -1320,13 +1300,13 @@ body {
     }
 }
 
-/* Bottom Nav Styling (at the bottom of the file) */
+/* Bottom Nav Styling (at the bottom of the file) - Refined for Alignment */
 .mobile-bottom-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 65px;
+    height: 60px;
     background: var(--color-bg-secondary);
     border-top: 1px solid var(--color-border);
     display: none; /* Shown via media query */
@@ -1334,7 +1314,10 @@ body {
     align-items: center;
     z-index: 1000;
     padding-bottom: env(safe-area-inset-bottom);
-    box-shadow: 0 -2px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-sizing: content-box;
 }
 
 .bottom-nav-item {
@@ -1346,12 +1329,12 @@ body {
     justify-content: center;
     gap: 4px;
     color: var(--color-text-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     cursor: pointer;
     flex: 1;
-    padding: 8px 0;
-    transition: all 0.2s;
+    height: 100%;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -1369,17 +1352,17 @@ body {
 }
 
 .bottom-nav-item .plus-icon {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     background: var(--color-accent-gradient);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    margin-top: -12px;
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
     border: 3px solid var(--color-bg-secondary);
+    margin-bottom: 2px;
 }
 
 .bottom-nav-item .plus-icon svg {
