@@ -1704,9 +1704,49 @@ body {
 }
 
 @media (max-width: 768px) {
-    .blog-card-actions {
-        opacity: 1;
-        /* Always visible on mobile to avoid hover issues */
+    /* Author row: wrap gracefully on narrow screens */
+    .blog-card-content > div:first-child {
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    /* Avatar slightly smaller on mobile */
+    .blog-card-content .author-avatar-sm {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Follow + action button group: tighter on mobile */
+    .blog-card-content > div:first-child > div:last-child {
+        gap: 0.25rem;
+    }
+
+    /* Make Follow button text compact on very small screens */
+    .follow-btn {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+    }
+
+    /* Shrink edit/delete action buttons slightly */
+    .blog-action-btn {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    .blog-action-btn svg {
+        width: 12px !important;
+        height: 12px !important;
+    }
+}
+
+/* Extra-small screens: hide Follow button text, show only icon */
+@media (max-width: 400px) {
+    .follow-btn span.follow-label {
+        display: none;
+    }
+    .follow-btn {
+        padding: 5px 8px;
     }
 }
 
