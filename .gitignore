@@ -19,4 +19,10 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Google Cloud / Firebase credentials (NEVER commit these)
 gcp-sa-key.json
+firebase-service-account.json
+*firebase-adminsdk*.json
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist

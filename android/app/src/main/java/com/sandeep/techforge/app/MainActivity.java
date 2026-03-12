@@ -1,4 +1,4 @@
-package com.techforge.app;
+package com.sandeep.techforge.app;
 
 import com.getcapacitor.BridgeActivity;
 
