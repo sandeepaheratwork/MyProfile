@@ -3,7 +3,8 @@ name: Deploy to Google Cloud Run
 on:
   push:
     branches:
-      - main   # Triggers on every push to main branch
+      - main               # Production deploys
+      - Profile-UI_Mobile  # Mobile branch deploys for testing
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
