@@ -156,6 +156,7 @@ async function initPushNotifications() {
 
                 PushNotifications.addListener('pushNotificationReceived', (notification) => {
                     showToast(`🔔 ${notification.title}: ${notification.body}`, 'info');
+                    fetchNotifications(); // Update UI when notification arrives
                 });
 
                 PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
@@ -201,6 +202,118 @@ function urlBase64ToUint8Array(base64String) {
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// ===================================
+// Notification Center Logic
+// ===================================
+let notifPollingInterval = null;
+
+function toggleNotificationPanel(e) {
+    const panel = document.getElementById('notificationPanel');
+    const isVisible = panel.style.display === 'flex';
+    
+    // Close other panels if any
+    
+    if (!isVisible) {
+        panel.style.display = 'flex';
+        fetchNotifications();
+        
+        // Mark all as read after a short delay or when opening
+        // For this UX, we'll keep them showing "unread" dot until individual interaction or "Mark all read" click
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+async function fetchNotifications() {
+    if (!currentUser) return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+            headers: { 'x-auth-token': currentUser.token }
+        });
+        const data = await response.json();
+        if (data.success) {
+            renderNotifications(data.notifications);
+            updateNotifBadge(data.unreadCount);
+        }
+    } catch (e) { console.warn('Failed to fetch notifications', e); }
+}
+
+function updateNotifBadge(count) {
+    const badge = document.getElementById('notifBadge');
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function renderNotifications(notifs) {
+    const list = document.getElementById('notifList');
+    if (!notifs || notifs.length === 0) {
+        list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+        return;
+    }
+
+    list.innerHTML = notifs.map(n => `
+        <div class="notif-item ${n.read ? '' : 'unread'}" onclick="handleNotifClick('${n._id}', '${n.url}')">
+            <div class="notif-content">
+                <div class="notif-title">${escapeHtml(n.title)}</div>
+                <div class="notif-body">${escapeHtml(n.body)}</div>
+                <div class="notif-time">${formatTimeAgo(new Date(n.createdAt))}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function handleNotifClick(notifId, url) {
+    try {
+        // Mark as read in background
+        fetch(`${API_BASE_URL}/api/notifications/${notifId}/read`, {
+            method: 'POST',
+            headers: { 'x-auth-token': currentUser.token }
+        });
+        
+        // Navigate
+        if (url) {
+            window.location.hash = url.replace(/^.*#/, '#');
+            // Close panel
+            document.getElementById('notificationPanel').style.display = 'none';
+        }
+        
+        // Locally mark read for UI snappiness
+        fetchNotifications(); 
+    } catch (e) { console.error('Notif click error', e); }
+}
+
+async function markAllNotificationsRead() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
+            method: 'POST',
+            headers: { 'x-auth-token': currentUser.token }
+        });
+        const data = await response.json();
+        if (data.success) {
+            fetchNotifications();
+        }
+    } catch (e) { console.error('Mark all read error', e); }
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutes ago";
+    return Math.floor(seconds) + " seconds ago";
 }
 
 function setupEventListeners() {
@@ -292,6 +405,16 @@ function setupEventListeners() {
             closeModal();
             closeLoginModal();
             closeChangePasswordModal();
+            document.getElementById('notificationPanel').style.display = 'none';
+        }
+    });
+
+    // Close notification panel when clicking outside
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('notificationPanel');
+        const bellBtn = document.getElementById('notificationBellBtn');
+        if (panel.style.display === 'flex' && !panel.contains(e.target) && !bellBtn.contains(e.target)) {
+            panel.style.display = 'none';
         }
     });
 
@@ -1214,11 +1337,13 @@ function updateUIForRole(switchView = true) {
     const userProfileTab = document.getElementById('userProfileTab');
     const newBlogBtn = document.getElementById('newBlogBtn');
     const userAvatar = document.getElementById('userAvatar');
+    const notificationBellWrap = document.getElementById('notificationBellWrap');
 
     if (currentUser) {
         if (loginBtn) loginBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'flex';
         if (changePasswordBtn) changePasswordBtn.style.display = 'flex';
+        if (notificationBellWrap) notificationBellWrap.style.display = 'block';
         mainNavTabs.style.display = 'flex';
 
         // Update Header Avatar
@@ -1229,6 +1354,12 @@ function updateUIForRole(switchView = true) {
                 ? `<img src="${getImageUrl(user.imageUrl)}" alt="${escapeHtml(user.name)}">`
                 : initials;
             userAvatar.style.display = 'flex';
+        }
+
+        // Start notification polling
+        if (!notifPollingInterval) {
+            fetchNotifications(); // Initial fetch
+            notifPollingInterval = setInterval(fetchNotifications, 60000); // Poll every minute
         }
 
         if (currentUser.user.role === 'admin') {
@@ -1251,9 +1382,17 @@ function updateUIForRole(switchView = true) {
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
+        if (notificationBellWrap) notificationBellWrap.style.display = 'none';
         if (addProfileBtn) addProfileBtn.style.display = 'none';
         if (userAvatar) userAvatar.style.display = 'none';
         mainNavTabs.style.display = 'none';
+
+        // Clear notification polling
+        if (notifPollingInterval) {
+            clearInterval(notifPollingInterval);
+            notifPollingInterval = null;
+        }
+
         // Guests can see blogs and are shown New Post to encourage registration
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
         if (switchView) switchTab('blogs');

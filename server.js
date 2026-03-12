@@ -205,6 +205,15 @@ async function getProfilesCollection() {
     return database.collection(COLLECTION_NAME);
 }
 
+async function getNotificationsCollection() {
+    const database = await connectToMongoDB();
+    const col = database.collection('notifications');
+    // Ensure TTL index — auto-delete notifications older than 30 days
+    col.createIndex({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 3600 }).catch(() => {});
+    col.createIndex({ recipientId: 1, read: 1, createdAt: -1 }).catch(() => {});
+    return col;
+}
+
 // Helper to hash password
 async function hashPassword(password) {
     return await bcrypt.hash(password, 10);
@@ -772,10 +781,26 @@ app.get('/api/profiles/:id', async (req, res) => {
  * @param {string} body
  * @param {string} [url] - URL to open when notification is tapped
  */
-async function sendPushToUser(targetUser, title, body, url = '/') {
+async function sendPushToUser(targetUser, title, body, url = '/', type = 'info') {
     const errors = [];
 
-    // Mobile push via Firebase Cloud Messaging
+    // === 1. Persist to MongoDB notifications collection ===
+    try {
+        const notifCol = await getNotificationsCollection();
+        await notifCol.insertOne({
+            recipientId: targetUser._id.toString(),
+            title,
+            body,
+            url,
+            type,        // 'follow' | 'like' | 'comment' | 'info'
+            read: false,
+            createdAt: new Date()
+        });
+    } catch (e) {
+        console.warn('Failed to persist notification:', e.message);
+    }
+
+    // === 2. Mobile push via Firebase Cloud Messaging ===
     if (firebaseAdmin && targetUser.fcmToken) {
         try {
             await firebaseAdmin.messaging().send({
@@ -787,7 +812,6 @@ async function sendPushToUser(targetUser, title, body, url = '/') {
             });
         } catch (e) {
             errors.push(`FCM: ${e.message}`);
-            // Token may be stale — clear it
             if (e.code === 'messaging/registration-token-not-registered') {
                 try {
                     const col = await getProfilesCollection();
@@ -797,7 +821,7 @@ async function sendPushToUser(targetUser, title, body, url = '/') {
         }
     }
 
-    // Web browser push via VAPID / Web Push API
+    // === 3. Web browser push via VAPID ===
     if (targetUser.webPushSubscription) {
         try {
             await webpush.sendNotification(
@@ -806,7 +830,6 @@ async function sendPushToUser(targetUser, title, body, url = '/') {
             );
         } catch (e) {
             errors.push(`WebPush: ${e.message}`);
-            // Subscription expired — clear it
             if (e.statusCode === 410) {
                 try {
                     const col = await getProfilesCollection();
@@ -865,9 +888,63 @@ app.post('/api/notifications/web-subscribe', async (req, res) => {
     }
 });
 
-// GET /api/notifications/vapid-public-key — Return the VAPID public key to the browser
+// GET /api/notifications/vapid-public-key
 app.get('/api/notifications/vapid-public-key', (req, res) => {
     res.json({ success: true, publicKey: VAPID_PUBLIC_KEY });
+});
+
+// GET /api/notifications — list notifications for current user
+app.get('/api/notifications', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token);
+        if (!session) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const col = await getNotificationsCollection();
+        const notifications = await col
+            .find({ recipientId: session.userId })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .toArray();
+
+        const unreadCount = notifications.filter(n => !n.read).length;
+        res.json({ success: true, notifications, unreadCount });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/notifications/:id/read — mark one as read
+app.post('/api/notifications/:id/read', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token);
+        if (!session) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const col = await getNotificationsCollection();
+        await col.updateOne(
+            { _id: new ObjectId(req.params.id), recipientId: session.userId },
+            { $set: { read: true } }
+        );
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/notifications/read-all — mark all as read
+app.post('/api/notifications/read-all', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token);
+        if (!session) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const col = await getNotificationsCollection();
+        await col.updateMany({ recipientId: session.userId, read: false }, { $set: { read: true } });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // ==========================================
@@ -922,7 +999,7 @@ app.post('/api/users/:id/follow', async (req, res) => {
         // Notify the target user when someone new follows them
         if (!isFollowing) {
             const follower = await collection.findOne({ _id: new ObjectId(currentUserId) });
-            sendPushToUser(updated, '🔔 New Follower!', `${follower?.name || 'Someone'} started following you`, '/').catch(() => {});
+            sendPushToUser(updated, '🔔 New Follower!', `${follower?.name || 'Someone'} started following you`, '/', 'follow').catch(() => {});
         }
 
         res.json({
@@ -1339,7 +1416,7 @@ app.post('/api/blogs/:id/like', checkAuth, async (req, res) => {
                     profilesCol.findOne({ _id: new ObjectId(userId) }),
                     profilesCol.findOne({ _id: new ObjectId(blog.author.id) })
                 ]);
-                if (author) sendPushToUser(author, '❤️ New Like!', `${liker?.name || 'Someone'} liked your post: "${blog.title}"`, `/#blog-${id}`).catch(() => {});
+                if (author) sendPushToUser(author, '❤️ New Like!', `${liker?.name || 'Someone'} liked your post: "${blog.title}"`, `/#blog-${id}`, 'like').catch(() => {});
             } catch (_) {}
         }
 
@@ -1390,7 +1467,7 @@ app.post('/api/blogs/:id/comments', checkAuth, async (req, res) => {
             try {
                 const profilesCol = await getProfilesCollection();
                 const author = await profilesCol.findOne({ _id: new ObjectId(blog.author.id) });
-                if (author) sendPushToUser(author, '💬 New Comment!', `${authorName} commented on "${blog.title}": "${content.trim().substring(0, 60)}"`, `/#blog-${id}`).catch(() => {});
+                if (author) sendPushToUser(author, '💬 New Comment!', `${authorName} commented on "${blog.title}": "${content.trim().substring(0, 60)}"`, `/#blog-${id}`, 'comment').catch(() => {});
             } catch (_) {}
         }
 
