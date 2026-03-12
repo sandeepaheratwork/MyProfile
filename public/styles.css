@@ -2164,6 +2164,47 @@ body {
     height: 20px;
 }
 
+/* Follow / Connect Button */
+.follow-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: var(--radius-full);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    border: 1.5px solid var(--color-accent-primary);
+    color: var(--color-accent-primary);
+    background: transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.follow-btn:hover {
+    background: rgba(139, 92, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.follow-btn.following {
+    background: var(--color-accent-gradient);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+}
+
+.follow-btn.following:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.follow-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
 /* Comments Section */
 .blog-comments-section {
     margin-top: var(--spacing-2xl);

@@ -703,13 +703,112 @@ app.get('/api/profiles/:id', async (req, res) => {
         const profile = await collection.findOne({ _id: new ObjectId(id) });
 
         if (!profile) {
-            return res.status(404).json({
-                success: false,
-                error: 'Profile not found'
-            });
+            return res.status(404).json({ success: false, error: 'Profile not found' });
         }
 
         res.json({ success: true, profile });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// Follow / Connect API Routes
+// ==========================================
+
+// POST /api/users/:id/follow — toggle follow/unfollow a user
+app.post('/api/users/:id/follow', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token);
+        if (!session) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const targetId = req.params.id;
+        const currentUserId = session.userId;
+
+        if (targetId === currentUserId) {
+            return res.status(400).json({ success: false, error: 'You cannot follow yourself' });
+        }
+
+        const collection = await getProfilesCollection();
+        const target = await collection.findOne({ _id: new ObjectId(targetId) });
+        if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const targetFollowers = target.followers || [];
+        const isFollowing = targetFollowers.includes(currentUserId);
+
+        if (isFollowing) {
+            // Unfollow
+            await collection.updateOne(
+                { _id: new ObjectId(targetId) },
+                { $pull: { followers: currentUserId } }
+            );
+            await collection.updateOne(
+                { _id: new ObjectId(currentUserId) },
+                { $pull: { following: targetId } }
+            );
+        } else {
+            // Follow
+            await collection.updateOne(
+                { _id: new ObjectId(targetId) },
+                { $addToSet: { followers: currentUserId } }
+            );
+            await collection.updateOne(
+                { _id: new ObjectId(currentUserId) },
+                { $addToSet: { following: targetId } }
+            );
+        }
+
+        const updated = await collection.findOne({ _id: new ObjectId(targetId) });
+        res.json({
+            success: true,
+            following: !isFollowing,
+            followersCount: (updated.followers || []).length
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/users/:id/followers — get list of followers for a user
+app.get('/api/users/:id/followers', async (req, res) => {
+    try {
+        const collection = await getProfilesCollection();
+        const user = await collection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const followerIds = (user.followers || []).map(id => {
+            try { return new ObjectId(id); } catch { return null; }
+        }).filter(Boolean);
+
+        const followers = followerIds.length
+            ? await collection.find({ _id: { $in: followerIds } },
+              { projection: { name: 1, email: 1, role: 1, imageUrl: 1, bio: 1 } }).toArray()
+            : [];
+
+        res.json({ success: true, followers, count: followers.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/users/:id/following — get list of users this user follows
+app.get('/api/users/:id/following', async (req, res) => {
+    try {
+        const collection = await getProfilesCollection();
+        const user = await collection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const followingIds = (user.following || []).map(id => {
+            try { return new ObjectId(id); } catch { return null; }
+        }).filter(Boolean);
+
+        const following = followingIds.length
+            ? await collection.find({ _id: { $in: followingIds } },
+              { projection: { name: 1, email: 1, role: 1, imageUrl: 1, bio: 1 } }).toArray()
+            : [];
+
+        res.json({ success: true, following, count: following.length });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
