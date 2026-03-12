@@ -1679,12 +1679,9 @@ body {
 
 /* Admin/Author action buttons on blog cards */
 .blog-card-actions {
-    position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
     display: flex;
     gap: 0.5rem;
-    z-index: 10;
+    align-items: center;
 }
 
 .blog-action-btn {
