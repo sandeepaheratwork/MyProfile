@@ -1240,30 +1240,6 @@ body {
         gap: var(--spacing-sm);
     }
 
-    /* ONLY for Native Mobile App when Logged In: Hide top tabs, actions and show refined bottom bar */
-    body.is-native-app.is-logged-in .nav-tabs,
-    body.is-native-app.is-logged-in .header-actions #userAvatar,
-    body.is-native-app.is-logged-in .header-actions #notificationBellWrap,
-    body.is-native-app.is-logged-in .header-actions #addProfileBtn,
-    body.is-native-app.is-logged-in .header-actions #logoutBtn,
-    body.is-native-app.is-logged-in .header-actions #changePasswordBtn,
-    body.is-native-app.is-logged-in #newBlogBtn {
-        display: none !important;
-    }
-
-    body.is-native-app .mobile-bottom-nav {
-        display: none; /* Controlled by is-logged-in class via JS if needed, but flex is better */
-    }
-
-    body.is-native-app.is-logged-in .mobile-bottom-nav {
-        display: flex !important;
-    }
-
-    /* ONLY for Native Mobile App: Adjust body padding so content isn't hidden behind bottom bar */
-    body.is-native-app.is-logged-in {
-        padding-bottom: calc(65px + env(safe-area-inset-bottom));
-    }
-
     .main-content {
         padding: var(--spacing-md);
         width: 100%;
@@ -1300,23 +1276,44 @@ body {
     }
 }
 
+/* ========================================
+   Native Mobile App (Capacitor) Overrides
+   These apply regardless of orientation/width
+   ======================================== */
+body.is-native-app.is-logged-in .nav-tabs,
+body.is-native-app.is-logged-in .header-actions #notificationBellWrap,
+body.is-native-app.is-logged-in .header-actions #changePasswordBtn,
+body.is-native-app.is-logged-in #newBlogBtn {
+    display: none !important;
+}
+
+body.is-native-app .mobile-bottom-nav {
+    display: flex !important;
+}
+
+body.is-native-app {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+}
+
 /* Bottom Nav Styling (at the bottom of the file) - Refined for Alignment */
 .mobile-bottom-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 65px;
+    /* Height covers the content + safe area fallback/env */
+    height: calc(75px + env(safe-area-inset-bottom, 0px));
     background: var(--color-bg-secondary);
     border-top: 1px solid var(--color-border);
     display: none; /* Shown via media query */
     justify-content: space-around;
-    align-items: center;
+    align-items: flex-start;
     z-index: 1000;
-    padding-bottom: env(safe-area-inset-bottom);
-    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    padding-top: 12px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
 }
 
 .bottom-nav-item {
@@ -1326,14 +1323,14 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 4px;
     color: var(--color-text-muted);
-    font-size: 10px;
-    font-weight: 500;
+    font-size: 11px; /* Slightly larger font */
+    font-weight: 600;
     cursor: pointer;
     flex: 1;
-    height: 100%;
-    transition: all 0.2s;
+    min-width: 0; /* Allow shrinking if needed */
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -1395,6 +1392,12 @@ body {
     bottom: var(--spacing-xl);
     right: var(--spacing-xl);
     z-index: 900;
+    transition: bottom 0.3s ease;
+}
+
+/* Lift chat widget when bottom nav is active */
+body.is-native-app .chat-widget {
+    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Chat Toggle Button */
@@ -1844,9 +1847,15 @@ body {
     }
 
     /* Make Follow button text compact on very small screens */
+    /* Make Follow button text compact on very small screens */
     .follow-btn {
         padding: 4px 10px;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
+        flex-shrink: 0 !important; /* Prevent squeezing */
+    }
+
+    .author-name {
+        font-size: 0.9rem !important;
     }
 
     /* Shrink edit/delete action buttons slightly */
@@ -2441,7 +2450,7 @@ body {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl);
-    z-index: 1000;
+    z-index: 1100;
     display: flex;
     flex-direction: column;
     overflow: hidden;
