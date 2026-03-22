@@ -866,6 +866,45 @@ body::before {
     /* Prevents flex items from bursting */
 }
 
+/* WYSIWYG Rich Editor Styles */
+.rich-editor:empty:before {
+    content: attr(data-placeholder);
+    color: var(--color-text-muted);
+    font-style: italic;
+    pointer-events: none;
+}
+
+.rich-editor:focus {
+    border-color: var(--color-accent-primary) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.rich-editor h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0.75rem 0 0.5rem 0;
+    color: var(--color-text-primary);
+}
+
+.rich-editor b, .rich-editor strong {
+    font-weight: 700;
+}
+
+.rich-editor i, .rich-editor em {
+    font-style: italic;
+}
+
+.rich-editor a {
+    color: var(--color-accent-primary);
+    text-decoration: underline;
+}
+
+.rich-editor img {
+    max-width: 100%;
+    border-radius: var(--radius-md);
+    margin: 0.5rem 0;
+}
+
 @media (max-width: 1024px) {
     .modal-lg {
         max-width: 800px;
@@ -874,6 +913,7 @@ body::before {
     .editor-container {
         flex-direction: column;
         padding: var(--spacing-lg);
+        min-height: auto !important; /* Override inline min-height: 450px */
     }
 
     .editor-pane.preview-pane {
@@ -902,6 +942,11 @@ body::before {
 
     .editor-pane.write-pane {
         display: flex !important;
+    }
+
+    /* Hide mobile-only elements on desktop */
+    .mobile-preview-overlay {
+        display: none !important;
     }
 }
 
@@ -1254,7 +1299,166 @@ body {
     .profile-stats { grid-template-columns: 1fr; gap: var(--spacing-md); padding: var(--spacing-md) 0; }
     .stat-item { align-items: center; text-align: center; }
     .modal { max-width: calc(100% - 2rem); margin: 1rem; max-height: calc(100vh - 2rem); }
-    #blogContentInput { height: 200px !important; }
+
+    /* ======= LinkedIn-style full-screen Post modal on mobile ======= */
+    #blogModal {
+        padding: 0 !important; /* Remove overlay padding */
+        align-items: stretch !important;
+        justify-content: stretch !important;
+    }
+
+    #blogModal .modal.modal-lg {
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 100vh !important;
+        height: 100vh !important;
+        height: 100dvh !important; /* Dynamic viewport height for mobile browsers */
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important; /* Prevent modal itself from scrolling */
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    #blogModal.active .modal.modal-lg {
+        transform: translateY(0) !important;
+    }
+
+    /* Override the generic active modal transform for blog modal */
+    #blogModal.active .modal {
+        transform: translateY(0) !important;
+    }
+
+    /* Fixed header toolbar on mobile */
+    #blogModal .modal-header {
+        flex-shrink: 0 !important;
+        background: var(--color-bg-secondary);
+        border-bottom: 1px solid var(--color-border);
+        padding: var(--spacing-md) var(--spacing-lg);
+        z-index: 10;
+    }
+
+    #blogModal .modal-header h2 {
+        font-size: 1.1rem;
+    }
+
+    /* Show the preview eye-icon button on mobile */
+    #mobilePreviewBtn {
+        display: flex !important;
+    }
+
+    /* Editor tabs – HIDE on mobile (use preview button in header instead) */
+    #blogModal .editor-tabs {
+        display: none !important;
+    }
+
+    /* Always show write pane on mobile */
+    #blogModal .editor-pane.write-pane {
+        display: flex !important;
+    }
+
+    /* Always hide preview pane on mobile */
+    #blogModal .editor-pane.preview-pane {
+        display: none !important;
+    }
+
+    /* Full-screen preview overlay on mobile */
+    .mobile-preview-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        z-index: 10000;
+        background: var(--color-bg-primary);
+        display: flex;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    .mobile-preview-overlay.active {
+        transform: translateX(0);
+    }
+
+    .mobile-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-md) var(--spacing-lg);
+        padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-secondary);
+        flex-shrink: 0;
+    }
+
+    .mobile-preview-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .mobile-preview-body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: var(--spacing-lg);
+    }
+
+    /* Scrollable form body */
+    #blogModal .modal-form {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        padding: var(--spacing-md) var(--spacing-lg);
+        min-height: 0 !important; /* Critical for flex scroll */
+    }
+
+    /* Override inline min-height on editor-container that pushes buttons off-screen */
+    #blogModal .editor-container {
+        flex-direction: column;
+        min-height: auto !important;
+        height: auto !important;
+    }
+
+    /* Override inline min-height on editor — it's set to 400px inline which is too tall */    
+    #blogModal #blogContentEditor { 
+        min-height: 180px !important;
+        height: 180px !important;
+        max-height: 50vh !important;
+        flex: none !important;
+    }
+
+    /* Override inline min-height on preview pane too */
+    #blogModal .preview-pane #blogPreviewContent {
+        min-height: auto !important;
+    }
+
+    /* Pro Tip box: compact on mobile */
+    #blogModal .form-group > div[style*="border-left"] {
+        margin-bottom: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    /* Hide some toolbar buttons on very small screens to save space */
+    #blogModal #blogInsertSandboxBtn {
+        display: none !important;
+    }
+
+    /* Publish bar at the bottom of the form */
+    #blogModal .modal-actions {
+        flex-shrink: 0 !important;
+        position: relative !important;
+        background: var(--color-bg-secondary);
+        border-top: 1px solid var(--color-border);
+        margin-top: var(--spacing-md) !important;
+        padding: var(--spacing-md) var(--spacing-lg);
+        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px));
+        z-index: 10;
+    }
+    /* ======= End LinkedIn-style Post modal ======= */
 
     /* For Mobile Web (not native app): Allow horizontal scrolling for top tabs */
     body:not(.is-native-app) .nav-tabs {
@@ -2437,6 +2641,82 @@ body.is-native-app .chat-widget {
     font-size: 0.95rem;
     line-height: 1.5;
     white-space: pre-wrap;
+}
+
+/* Comment action bar (Like, Reply) */
+.comment-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 6px;
+    padding-top: 4px;
+}
+
+.comment-action-btn {
+    background: none;
+    border: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    transition: color 0.2s ease;
+}
+
+.comment-action-btn:hover {
+    color: var(--color-accent-primary);
+}
+
+.comment-action-btn.liked {
+    color: #ef4444;
+}
+
+.comment-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Nested reply threads */
+.comment-replies {
+    margin-left: 2.5rem;
+    margin-top: 0.5rem;
+    padding-left: var(--spacing-md);
+    border-left: 2px solid var(--color-border);
+}
+
+.comment-replies .comment-item {
+    margin-bottom: var(--spacing-md);
+}
+
+.comment-replies .comment-content {
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.reply-input-area {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+    margin-left: 2.5rem;
+    padding-left: var(--spacing-md);
+}
+
+.reply-input-area .comment-input {
+    min-height: 36px;
+    padding: 8px 12px;
+    font-size: 0.875rem;
+}
+
+/* @mention highlight in comments */
+.comment-mention {
+    color: var(--color-accent-primary);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.comment-mention:hover {
+    text-decoration: underline;
 }
 
 /* Notification Panel Styles */
