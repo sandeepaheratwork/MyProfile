@@ -1405,17 +1405,41 @@ body {
         padding: var(--spacing-lg);
     }
 
-    /* Scrollable form body */
-    #blogModal .modal-form {
+    /* Fixed height modal for mobile to ensure buttons are on screen */
+    #blogModal .modal-content {
+        height: 100% !important;
+        max-height: 100vh !important;
+        width: 100% !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
         display: flex !important;
         flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    #blogModal .modal-header {
+        flex-shrink: 0 !important;
+        padding: 1rem 1.5rem !important;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Scrollable form body - only this part scrolls */
+    #blogModal #blogForm {
         flex: 1 1 auto !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch;
-        padding: var(--spacing-md) var(--spacing-lg);
-        min-height: 0 !important;
-        position: relative;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    #blogModal .modal-form {
+        flex: 1 1 auto !important;
+        padding: var(--spacing-md) var(--spacing-lg) !important;
+        min-height: min-content !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     /* Override inline min-height on editor-container that pushes buttons off-screen */
@@ -1450,18 +1474,36 @@ body {
         display: none !important;
     }
 
-    /* Publish bar at the bottom of the form - Floating Fixed on Mobile */
+    /* Publish bar - PERMANENTLY PINNED to the bottom on mobile */
     #blogModal .modal-actions {
         flex-shrink: 0 !important;
-        position: sticky !important;
+        position: relative !important;
         bottom: 0 !important;
-        background: var(--color-bg-primary);
-        border-top: 1px solid var(--color-border);
+        background: var(--color-bg-primary) !important;
+        border-top: 1px solid var(--color-border) !important;
         margin: 0 !important;
-        padding: var(--spacing-md) var(--spacing-lg);
-        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 10px));
-        z-index: 100;
-        box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+        padding: 1rem var(--spacing-lg) !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 15px)) !important;
+        z-index: 1000 !important;
+        box-shadow: 0 -8px 20px rgba(0,0,0,0.1) !important;
+        width: 100% !important;
+        left: 0 !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 0.75rem !important;
+    }
+
+    #blogModal .modal-actions button {
+        flex: 1 !important; /* Make buttons wider and easier to tap on mobile */
+        height: 48px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Disable state styling */
+    #blogModal .modal-actions button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        filter: grayscale(1);
     }
     /* ======= End LinkedIn-style Post modal ======= */
 

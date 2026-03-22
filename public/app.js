@@ -1686,6 +1686,9 @@ function openBlogModal() {
     const modal = document.getElementById('blogModal');
     if (modal) modal.classList.add('active');
 
+    // Initialize Publish button state
+    validateBlogForm();
+
     // Restore Draft
     const savedDraft = localStorage.getItem('draft_blog');
     if (savedDraft) {
@@ -3883,3 +3886,30 @@ function copyToClipboard(text) {
 // Initialize chat on DOM ready
 document.addEventListener('DOMContentLoaded', initChat);
 console.log('Location:', window.location.href); console.log('Protocol:', window.location.protocol); console.log('Origin:', window.location.origin);
+function validateBlogForm() {
+    const title = document.getElementById('blogTitleInput')?.value.trim();
+    const richEditor = document.getElementById('blogContentEditor');
+    const content = richEditor ? (richEditor.textContent.trim() || richEditor.querySelector('img')) : '';
+    const submitBtn = document.getElementById('submitBlogBtn');
+    
+    if (submitBtn) {
+        submitBtn.disabled = !(title && content);
+    }
+}
+
+// Ensure validation runs on every input
+document.addEventListener('DOMContentLoaded', () => {
+    const titleInput = document.getElementById('blogTitleInput');
+    const richEditor = document.getElementById('blogContentEditor');
+    
+    if (titleInput) {
+        titleInput.addEventListener('input', validateBlogForm);
+    }
+    
+    if (richEditor) {
+        richEditor.addEventListener('input', validateBlogForm);
+        // Also check on paste/drop
+        richEditor.addEventListener('paste', () => setTimeout(validateBlogForm, 50));
+        richEditor.addEventListener('drop', () => setTimeout(validateBlogForm, 50));
+    }
+});
