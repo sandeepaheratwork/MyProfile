@@ -289,11 +289,24 @@ async function handleNotifClick(notifId, url) {
             headers: { 'x-auth-token': currentUser.token }
         });
         
-        // Navigate
+        // Navigate based on URL
         if (url) {
-            window.location.hash = url.replace(/^.*#/, '#');
-            // Close panel
+            // Close panel first
             document.getElementById('notificationPanel').style.display = 'none';
+            
+            // Extract the hash portion
+            const hashPart = url.includes('#') ? url.substring(url.indexOf('#')) : '';
+            
+            if (hashPart.startsWith('#blog-')) {
+                // Navigate to specific blog post
+                const blogId = hashPart.replace('#blog-', '');
+                showBlogDetail(blogId);
+            } else if (hashPart === '#my-profile') {
+                // Navigate to own profile
+                switchTab('my-profile');
+            } else if (hashPart) {
+                window.location.hash = hashPart;
+            }
         }
         
         // Locally mark read for UI snappiness
@@ -527,6 +540,55 @@ function setupEventListeners() {
     document.getElementById('cancelBlogBtn').addEventListener('click', closeBlogModal);
     document.getElementById('blogForm').addEventListener('submit', handleBlogSubmit);
 
+    // Mobile Preview Button — opens full-screen review overlay
+    const mobilePreviewBtn = document.getElementById('mobilePreviewBtn');
+    const mobilePreviewOverlay = document.getElementById('mobilePreviewOverlay');
+    const mobilePreviewBackBtn = document.getElementById('mobilePreviewBackBtn');
+    const mobilePreviewContent = document.getElementById('mobilePreviewContent');
+
+    if (mobilePreviewBtn && mobilePreviewOverlay) {
+        mobilePreviewBtn.addEventListener('click', () => {
+            // Render the preview content
+            const title = document.getElementById('blogTitleInput')?.value || 'Post Title';
+            const tagsStr = document.getElementById('blogTagsInput')?.value || '';
+            const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
+            let content = document.getElementById('blogContentInput')?.value || '';
+
+            const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+            const heroImageUrl = imgMatch ? imgMatch[1] : null;
+            if (heroImageUrl) content = content.replace(/!\[.*?\]\(.*?\)/, '');
+
+            const renderedContent = typeof marked !== 'undefined'
+                ? marked.parse(content || '*No content to preview*')
+                : escapeHtml(content);
+
+            mobilePreviewContent.innerHTML = `
+                <article class="blog-detail" style="border: none; box-shadow: none; background: transparent;">
+                    <header class="blog-header" style="padding: 0 0 1.5rem 0;">
+                        <h1 style="font-size: 1.5rem; margin-bottom: 0.75rem;">${escapeHtml(title)}</h1>
+                        <div class="blog-author-strip">
+                            <div class="author-info-sm" style="margin-left: 0;">
+                                <span class="author-name">${currentUser ? escapeHtml(currentUser.user.name) : 'You'}</span>
+                                <span class="post-date">Just now</span>
+                            </div>
+                        </div>
+                    </header>
+                    ${heroImageUrl ? `<div class="blog-hero-image" style="margin-bottom: 1.5rem; border-radius: var(--radius-md);"><img src="${getImageUrl(heroImageUrl)}" alt="Preview"></div>` : ''}
+                    <div class="blog-content markdown-body" style="padding: 0;">
+                        ${renderedContent}
+                    </div>
+                    ${tags.length > 0 ? `<div class="blog-tags" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-border);">${tags.map(t => `<span class="blog-tag">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+                </article>
+            `;
+
+            mobilePreviewOverlay.classList.add('active');
+        });
+
+        mobilePreviewBackBtn.addEventListener('click', () => {
+            mobilePreviewOverlay.classList.remove('active');
+        });
+    }
+
     // Blog Image Insertion
     const blogInsertImageBtn = document.getElementById('blogInsertImageBtn');
     const blogImageInput = document.getElementById('blogImageInput');
@@ -560,93 +622,101 @@ function setupEventListeners() {
         blogImageInput.addEventListener('change', (e) => handleBlogImageUpload(e.target.files[0]));
     }
 
-    // Text Formatting Buttons (using mousedown + preventDefault to retain textarea focus)
+    // WYSIWYG Formatting Buttons (using execCommand for rich text editing)
+    const blogContentEditor = document.getElementById('blogContentEditor');
     const formatBtnBold = document.getElementById('blogFormatBoldBtn');
     const formatBtnItalic = document.getElementById('blogFormatItalicBtn');
     const formatBtnH2 = document.getElementById('blogFormatH2Btn');
     const formatBtnLink = document.getElementById('blogFormatLinkBtn');
 
-    const applyFormat = (prefix, suffix = '') => {
-        if (!blogContentInput) return;
-        const start = blogContentInput.selectionStart;
-        const end = blogContentInput.selectionEnd;
-        const selectedText = blogContentInput.value.substring(start, end);
-        const text = blogContentInput.value;
-        const replaceStr = prefix + selectedText + suffix;
-        blogContentInput.value = text.substring(0, start) + replaceStr + text.substring(end);
-
-        // Adjust cursor position
-        blogContentInput.focus();
-        if (selectedText.length > 0) {
-            blogContentInput.setSelectionRange(start, start + replaceStr.length);
-        } else {
-            // Place cursor inside the formatting tags if nothing was selected
-            blogContentInput.setSelectionRange(start + prefix.length, start + prefix.length);
+    if (formatBtnBold) formatBtnBold.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.execCommand('bold', false, null);
+        blogContentEditor?.focus();
+    });
+    if (formatBtnItalic) formatBtnItalic.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.execCommand('italic', false, null);
+        blogContentEditor?.focus();
+    });
+    if (formatBtnH2) formatBtnH2.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.execCommand('formatBlock', false, 'h2');
+        blogContentEditor?.focus();
+    });
+    if (formatBtnLink) formatBtnLink.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const url = prompt('Enter URL:', 'https://');
+        if (url) {
+            document.execCommand('createLink', false, url);
         }
-        blogContentInput.dispatchEvent(new Event('input')); // Trigger preview/autosave
-    };
+        blogContentEditor?.focus();
+    });
 
-    if (formatBtnBold) formatBtnBold.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('**', '**'); });
-    if (formatBtnItalic) formatBtnItalic.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('*', '*'); });
-    if (formatBtnH2) formatBtnH2.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('\n## ', '\n'); });
-    if (formatBtnLink) formatBtnLink.addEventListener('mousedown', (e) => { e.preventDefault(); applyFormat('[', '](https://)'); });
-
-    const blogInsertSandboxBtn = document.getElementById('blogInsertSandboxBtn');
-    if (blogInsertSandboxBtn && blogContentInput) {
-        blogInsertSandboxBtn.addEventListener('click', () => {
-            const sandboxId = prompt("Enter CodeSandbox ID (e.g., 'new' or a specific ID like 'react-new'):", "react-new");
-            if (sandboxId) {
-                const cursorPos = blogContentInput.selectionStart;
-                const text = blogContentInput.value;
-                const embedCode = `\n\n[sandbox:${sandboxId}]\n\n`;
-                blogContentInput.value = text.substring(0, cursorPos) + embedCode + text.substring(cursorPos);
+    // Sync rich editor content → hidden textarea + desktop preview on every input
+    if (blogContentEditor) {
+        blogContentEditor.addEventListener('input', () => {
+            // Sync to hidden textarea as markdown
+            if (blogContentInput) {
+                blogContentInput.value = htmlToMarkdown(blogContentEditor.innerHTML);
+            }
+            // Update desktop live preview
+            if (window.innerWidth > 1024 && typeof updateBlogPreview === 'function') {
+                updateBlogPreview();
             }
         });
     }
 
-    if (blogContentInput) {
-        // Drag and Drop
-        blogContentInput.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            blogContentInput.style.borderColor = 'var(--color-accent-primary)';
-            blogContentInput.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
+    const blogInsertSandboxBtn = document.getElementById('blogInsertSandboxBtn');
+    if (blogInsertSandboxBtn && blogContentEditor) {
+        blogInsertSandboxBtn.addEventListener('click', () => {
+            const sandboxId = prompt("Enter CodeSandbox ID (e.g., 'new' or a specific ID like 'react-new'):", "react-new");
+            if (sandboxId) {
+                blogContentEditor.focus();
+                document.execCommand('insertHTML', false, `<p>[sandbox:${sandboxId}]</p>`);
+            }
         });
-        blogContentInput.addEventListener('dragleave', () => {
-            blogContentInput.style.borderColor = '';
-            blogContentInput.style.boxShadow = '';
-        });
-        blogContentInput.addEventListener('drop', (e) => {
+    }
+
+    if (blogContentEditor) {
+        // Drag and Drop on rich editor
+        blogContentEditor.addEventListener('dragover', (e) => {
             e.preventDefault();
-            blogContentInput.style.borderColor = '';
-            blogContentInput.style.boxShadow = '';
+            blogContentEditor.style.borderColor = 'var(--color-accent-primary)';
+            blogContentEditor.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
+        });
+        blogContentEditor.addEventListener('dragleave', () => {
+            blogContentEditor.style.borderColor = '';
+            blogContentEditor.style.boxShadow = '';
+        });
+        blogContentEditor.addEventListener('drop', (e) => {
+            e.preventDefault();
+            blogContentEditor.style.borderColor = '';
+            blogContentEditor.style.boxShadow = '';
             if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                 handleBlogImageUpload(e.dataTransfer.files[0]);
             }
         });
         // Paste support
-        blogContentInput.addEventListener('paste', async (e) => {
+        blogContentEditor.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             const textContent = (e.clipboardData || e.originalEvent.clipboardData).getData('text');
 
             // Image Paste
             for (const item of items) {
                 if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault();
                     const file = item.getAsFile();
                     handleBlogImageUpload(file);
-                    return; // exit early if it's an image
+                    return;
                 }
             }
 
             // URL Paste for Rich Previews
             if (textContent && /^https?:\/\/[^\s]+$/.test(textContent.trim())) {
+                e.preventDefault();
                 const url = textContent.trim();
-
-                // Show a loading indicator temporarily
-                const placeholder = `\n\n[Loading preview for ${url}...]()\n\n`;
-                const cursorFallback = blogContentInput.value.length;
-                const start = blogContentInput.selectionStart ?? cursorFallback;
-                const end = blogContentInput.selectionEnd ?? cursorFallback;
-                blogContentInput.value = blogContentInput.value.substring(0, start) + placeholder + blogContentInput.value.substring(end);
+                document.execCommand('insertHTML', false, `<a href="${url}" target="_blank">${url}</a> `);
 
                 try {
                     const res = await fetch(`${API_BASE_URL}/api/link-preview?url=${encodeURIComponent(url)}`);
@@ -654,42 +724,34 @@ function setupEventListeners() {
 
                     if (data.success && data.preview.title) {
                         const previewMetadata = JSON.stringify(data.preview);
-                        // Save string as base64 to avoid markdown parsing breaking the JSON string
                         const encodedMeta = btoa(unescape(encodeURIComponent(previewMetadata)));
-                        const linkCardMarkdown = `\n\n[link-preview:${encodedMeta}]\n\n`;
-                        blogContentInput.value = blogContentInput.value.replace(placeholder, linkCardMarkdown);
-                    } else {
-                        // Revert to plain url if preview failed
-                        blogContentInput.value = blogContentInput.value.replace(placeholder, `\n\n${url}\n\n`);
+                        // Store link-preview marker in the hidden textarea
+                        if (blogContentInput) {
+                            blogContentInput.value = htmlToMarkdown(blogContentEditor.innerHTML) + `\n\n[link-preview:${encodedMeta}]\n\n`;
+                        }
                     }
-                    blogContentInput.dispatchEvent(new Event('input'));
-                } catch (error) {
-                    blogContentInput.value = blogContentInput.value.replace(placeholder, `\n\n${url}\n\n`);
-                }
+                } catch (_) {}
             }
         });
 
-        // Live Preview in Split Mode and Autosave Draft
+        // Autosave Draft
         let draftTimeout;
         const saveDraft = () => {
             clearTimeout(draftTimeout);
             draftTimeout = setTimeout(() => {
                 const form = document.getElementById('blogForm');
-                if (form && form.dataset.editId) {
-                    // Do not overwrite the 'New Post' draft with an edit of an existing post
-                    return;
-                }
+                if (form && form.dataset.editId) return;
 
                 const title = document.getElementById('blogTitleInput')?.value || '';
                 const tags = document.getElementById('blogTagsInput')?.value || '';
-                const content = document.getElementById('blogContentInput')?.value || '';
+                const content = blogContentInput?.value || htmlToMarkdown(blogContentEditor.innerHTML);
 
                 if (title || content || tags) {
                     localStorage.setItem('draft_blog', JSON.stringify({ title, tags, content }));
                 } else {
                     localStorage.removeItem('draft_blog');
                 }
-            }, 1000); // Debounce for 1 second
+            }, 1000);
         };
 
         const updateOnInput = () => {
@@ -699,13 +761,16 @@ function setupEventListeners() {
             saveDraft();
         };
 
-        blogContentInput.addEventListener('input', updateOnInput);
+        blogContentEditor.addEventListener('input', updateOnInput);
         document.getElementById('blogTitleInput')?.addEventListener('input', updateOnInput);
         document.getElementById('blogTagsInput')?.addEventListener('input', updateOnInput);
 
-        // Add Autocomplete for @mentions and #tags
-        setupAutocomplete(blogContentInput);
         setupTagsInputAutocomplete(document.getElementById('blogTagsInput'));
+        
+        // Initialize rich editor autocomplete
+        if (blogContentEditor) {
+            setupRichEditorAutocomplete(blogContentEditor);
+        }
     }
 
     // Blog Modal Preview Tabs
@@ -742,6 +807,172 @@ function setupEventListeners() {
 }
 
 // Real-time Autocomplete implementation logic
+function setupRichEditorAutocomplete(editor) {
+    if (!editor) return;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    document.body.appendChild(dropdown);
+
+    let activeIndex = -1;
+    let currentRange = null;
+    let lastQuery = null;
+
+    const hideDropdown = () => {
+        dropdown.style.display = 'none';
+        activeIndex = -1;
+    };
+
+    const getCursorXY = () => {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0).cloneRange();
+            const rects = range.getClientRects();
+            if (rects.length > 0) {
+                return { x: rects[0].left, y: rects[0].top };
+            }
+        }
+        return { x: 0, y: 0 };
+    };
+
+    document.addEventListener('click', (e) => {
+        if (!editor.contains(e.target) && !dropdown.contains(e.target)) {
+            hideDropdown();
+        }
+    });
+
+    editor.addEventListener('keydown', (e) => {
+        if (dropdown.style.display === 'block') {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveItem(items);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    e.preventDefault();
+                    items[activeIndex].click();
+                }
+            } else if (e.key === 'Escape') {
+                hideDropdown();
+            }
+        }
+    });
+
+    const updateActiveItem = (items) => {
+        items.forEach((item, idx) => {
+            if (idx === activeIndex) {
+                item.classList.add('active');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    };
+
+    editor.addEventListener('input', async () => {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+
+        const range = selection.getRangeAt(0);
+        const textNode = range.startContainer;
+        
+        if (textNode.nodeType !== Node.TEXT_NODE) {
+            hideDropdown();
+            return;
+        }
+
+        const textBefore = textNode.textContent.substring(0, range.startOffset);
+        const match = textBefore.match(/(?:^|\s)([@#])([\w\-\s]{0,20})$/);
+
+        if (!match) {
+            hideDropdown();
+            return;
+        }
+
+        const type = match[1];
+        const query = match[2];
+        
+        // Save current range to restore it on click
+        currentRange = range.cloneRange();
+        // Adjust currentRange to cover exactly the "@query" text
+        const matchStart = match.index + (textBefore.match(/^\s/) ? 0 : (textBefore.lastIndexOf(type, range.startOffset) || 0));
+        // Simple heuristic: find last index of type char before cursor
+        const lastIndexOfType = textBefore.lastIndexOf(type);
+        currentRange.setStart(textNode, lastIndexOfType);
+        currentRange.setEnd(textNode, range.startOffset);
+
+        if (query === lastQuery && dropdown.style.display === 'block') return;
+        lastQuery = query;
+
+        let results = [];
+        try {
+            if (type === '@') {
+                const res = await fetch(`${API_BASE_URL}/api/profiles/search?q=${query}`);
+                const data = await res.json();
+                if (data.success) results = data.profiles.slice(0, 5).map(p => ({ label: p.name, value: p.username || p.name }));
+            } else {
+                const res = await fetch(`${API_BASE_URL}/api/tags/search?q=${query}`);
+                const data = await res.json();
+                if (data.success) results = data.tags.slice(0, 5).map(t => ({ label: t, value: t }));
+            }
+        } catch (e) {}
+
+        if (results.length === 0) {
+            hideDropdown();
+            return;
+        }
+
+        dropdown.innerHTML = '';
+        results.forEach((result) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.innerHTML = `${type === '@' ? '👤' : '🏷️'} <strong>${type}${escapeHtml(result.label)}</strong>`;
+
+            item.addEventListener('click', () => {
+                // Remove the @query text
+                currentRange.deleteContents();
+                
+                // Construct the mention link or styled span
+                const span = document.createElement('span');
+                span.className = type === '@' ? 'comment-mention' : 'hashtag-mention';
+                span.style.color = 'var(--color-accent-primary)';
+                span.style.fontWeight = '500';
+                span.textContent = type + result.value;
+                
+                // Insert the span
+                currentRange.insertNode(span);
+                
+                // Add a space after
+                const space = document.createTextNode('\u00A0');
+                span.after(space);
+
+                // Move cursor after the space
+                const newRange = document.createRange();
+                newRange.setStartAfter(space);
+                newRange.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+
+                hideDropdown();
+                editor.dispatchEvent(new Event('input'));
+            });
+            dropdown.appendChild(item);
+        });
+
+        const coords = getCursorXY();
+        dropdown.style.top = `${coords.y + window.scrollY + 25}px`;
+        dropdown.style.left = `${coords.x + window.scrollX}px`;
+        dropdown.style.display = 'block';
+        activeIndex = 0;
+        updateActiveItem(dropdown.querySelectorAll('.autocomplete-item'));
+    });
+}
+
 function setupAutocomplete(textarea) {
     if (!textarea) return;
 
@@ -1434,11 +1665,10 @@ function updateUIForRole(switchView = true) {
 
 function openBlogModal() {
     if (!currentUser) {
-        // Guest: open login modal on the Register tab with a hint
         const loginModal = document.getElementById('loginModal');
         const registerTab = document.getElementById('showRegisterTab');
         if (loginModal) loginModal.classList.add('active');
-        if (registerTab) registerTab.click(); // switch to Register tab
+        if (registerTab) registerTab.click();
         showToast('Please register or log in to create a post.', 'error');
         return;
     }
@@ -1448,6 +1678,10 @@ function openBlogModal() {
         form.reset();
         form.removeAttribute('data-edit-id');
     }
+
+    // Clear the rich editor
+    const richEditor = document.getElementById('blogContentEditor');
+    if (richEditor) richEditor.innerHTML = '';
 
     const modal = document.getElementById('blogModal');
     if (modal) modal.classList.add('active');
@@ -1464,6 +1698,13 @@ function openBlogModal() {
             if (titleInput && draft.title) titleInput.value = draft.title;
             if (tagsInput && draft.tags) tagsInput.value = draft.tags;
             if (contentInput && draft.content) contentInput.value = draft.content;
+
+            // Load draft markdown into the rich editor as HTML
+            if (richEditor && draft.content) {
+                richEditor.innerHTML = typeof marked !== 'undefined' 
+                    ? marked.parse(draft.content) 
+                    : draft.content;
+            }
 
             if (typeof updateBlogPreview === 'function') updateBlogPreview();
         } catch (e) {
@@ -1516,6 +1757,14 @@ function closeBlogModal() {
     // Reset tabs
     const blogWriteTab = document.getElementById('blogWriteTab');
     if (blogWriteTab) blogWriteTab.click();
+
+    // Clear the rich editor
+    const richEditor = document.getElementById('blogContentEditor');
+    if (richEditor) richEditor.innerHTML = '';
+
+    // Close mobile preview overlay if open
+    const mobilePreviewOverlay = document.getElementById('mobilePreviewOverlay');
+    if (mobilePreviewOverlay) mobilePreviewOverlay.classList.remove('active');
 }
 
 async function handleForgotPassword(e) {
@@ -1613,19 +1862,13 @@ async function handleBlogImageUpload(file) {
         return;
     }
 
-    if (file.size > 5 * 1024 * 1024) { // Increased to 5MB for server storage
+    if (file.size > 5 * 1024 * 1024) {
         showToast('Image is too large. Max 5MB.', 'error');
         return;
     }
 
+    const blogContentEditor = document.getElementById('blogContentEditor');
     const blogContentInput = document.getElementById('blogContentInput');
-
-    // Add a placeholder while processing
-    const placeholder = `\n![Processing ${file.name}...]()\n`;
-    const cursorFallback = blogContentInput.value.length;
-    const start = blogContentInput.selectionStart ?? cursorFallback;
-    const end = blogContentInput.selectionEnd ?? cursorFallback;
-    blogContentInput.value = blogContentInput.value.substring(0, start) + placeholder + blogContentInput.value.substring(end);
 
     try {
         const reader = new FileReader();
@@ -1649,15 +1892,13 @@ async function handleBlogImageUpload(file) {
             const data = await response.json();
 
             if (data.success) {
-                const markdownImage = `\n![${file.name}](${data.url})\n`;
-                blogContentInput.value = blogContentInput.value.replace(placeholder, markdownImage);
-                blogContentInput.dispatchEvent(new Event('input'));
-
-                // Switch to Preview tab on mobile to show the image view immediately
-                if (window.innerWidth <= 1024) {
-                    const blogPreviewTab = document.getElementById('blogPreviewTab');
-                    if (blogPreviewTab) {
-                        blogPreviewTab.click();
+                // Insert image into the rich editor
+                if (blogContentEditor) {
+                    blogContentEditor.focus();
+                    document.execCommand('insertHTML', false, `<img src="${data.url}" alt="${file.name}" style="max-width: 100%; border-radius: 8px; margin: 0.5rem 0;">`);
+                    // Sync to hidden textarea
+                    if (blogContentInput) {
+                        blogContentInput.value = htmlToMarkdown(blogContentEditor.innerHTML);
                     }
                 }
             } else {
@@ -1667,16 +1908,23 @@ async function handleBlogImageUpload(file) {
         reader.readAsDataURL(file);
     } catch (error) {
         console.error('Error uploading image:', error);
-        blogContentInput.value = blogContentInput.value.replace(placeholder, '');
         showToast('Failed to upload image: ' + error.message, 'error');
     }
 }
 
 async function handleBlogSubmit(e) {
     e.preventDefault();
+
+    // Sync rich editor → hidden textarea before submission
+    const richEditor = document.getElementById('blogContentEditor');
+    const blogContentInput = document.getElementById('blogContentInput');
+    if (richEditor && blogContentInput) {
+        blogContentInput.value = htmlToMarkdown(richEditor.innerHTML);
+    }
+
     const title = document.getElementById('blogTitleInput').value.trim();
     const tags = document.getElementById('blogTagsInput').value.split(',').map(t => t.trim()).filter(t => t);
-    const content = document.getElementById('blogContentInput').value.trim();
+    const content = blogContentInput.value.trim();
     const submitBtn = document.getElementById('submitBlogBtn');
 
     const form = document.getElementById('blogForm');
@@ -1720,6 +1968,15 @@ async function showBlogDetail(id, pushState = true) {
     if (pushState) {
         window.location.hash = `blog-${id}`;
     }
+
+    // Ensure the blogs section is visible (e.g. when navigating from Profile tab)
+    // Don't use switchTab('blogs') because it calls loadBlogs() which would overwrite the detail
+    const sections = ['blogsSection', 'profilesSection', 'searchSection', 'myProfileSection'];
+    sections.forEach(s => { const el = document.getElementById(s); if (el) el.style.display = 'none'; });
+    const blogsEl = document.getElementById('blogsSection');
+    if (blogsEl) blogsEl.style.display = 'block';
+    const blogStickyHeader = document.getElementById('blogStickyHeader');
+    if (blogStickyHeader) blogStickyHeader.style.display = 'flex';
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/blogs/${id}`);
@@ -1893,16 +2150,48 @@ async function showBlogDetail(id, pushState = true) {
                                 `}
 
                                 <div class="comments-list">
-                                    ${(blog.comments || []).slice().reverse().map(comment => `
+                                    ${(blog.comments || []).slice().reverse().map(comment => {
+                                        const commentLikes = comment.likes || [];
+                                        const isCommentLiked = currentUser && commentLikes.includes(currentUser.user.id);
+                                        const commentContent = renderCommentContent(comment.content);
+                                        const replies = comment.replies || [];
+                                        return `
                                         <div class="comment-item">
                                             <div class="author-avatar-sm" style="flex-shrink: 0; width: 36px; height: 36px; font-size: 0.8rem;">${getInitials(comment.userName)}</div>
                                             <div class="comment-content">
                                                 <h5>${escapeHtml(comment.userName)}</h5>
                                                 <span class="comment-date">${new Date(comment.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
-                                                <p>${escapeHtml(comment.content)}</p>
+                                                <p>${commentContent}</p>
+                                                <div class="comment-actions">
+                                                    <button class="comment-action-btn ${isCommentLiked ? 'liked' : ''}" onclick="toggleCommentLike('${blog._id}', '${comment.id}', this)">
+                                                        <svg viewBox="0 0 24 24" fill="${isCommentLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                                                        <span>${commentLikes.length > 0 ? commentLikes.length : ''} Like</span>
+                                                    </button>
+                                                    <button class="comment-action-btn" onclick="toggleReplyInput('${blog._id}', '${comment.id}')">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                                                        <span>Reply</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    `).join('')}
+                                        ${replies.length > 0 ? `
+                                        <div class="comment-replies">
+                                            ${replies.map(reply => `
+                                                <div class="comment-item">
+                                                    <div class="author-avatar-sm" style="flex-shrink: 0; width: 30px; height: 30px; font-size: 0.7rem;">${getInitials(reply.userName)}</div>
+                                                    <div class="comment-content">
+                                                        <h5>${escapeHtml(reply.userName)}</h5>
+                                                        <span class="comment-date">${new Date(reply.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}</span>
+                                                        <p>${renderCommentContent(reply.content)}</p>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>` : ''}
+                                        <div id="reply-input-${comment.id}" class="reply-input-area" style="display: none;">
+                                            <textarea class="comment-input" placeholder="Write a reply... Use @name to mention" id="replyInput-${comment.id}"></textarea>
+                                            <button class="btn btn-primary btn-sm" style="height:fit-content;" onclick="addReply('${blog._id}', '${comment.id}')">Reply</button>
+                                        </div>
+                                    `;}).join('')}
                                 </div>
                             </div>
                         </footer>
@@ -1954,7 +2243,7 @@ function renderBlogs(blogs) {
 
         // Render Markdown
         let renderedContent = typeof marked !== 'undefined' ? marked.parse(content) : escapeHtml(content).replace(/\n/g, '<br>');
-        renderedContent = renderedContent.replace(/(^|\s)@(\w+)/g, '$1<span style="color: var(--color-accent-primary); font-weight: 500; cursor: pointer;">@$2</span>');
+        renderedContent = renderedContent.replace(/(^|\s)@(\w+)/g, '$1<span class="comment-mention" onclick="viewUserProfile(\'$2\')" style="cursor: pointer;">@$2</span>');
         renderedContent = renderedContent.replace(/(^|\s)#(\w+)/g, '$1<span style="color: var(--color-accent-primary); cursor: pointer;">#$2</span>');
 
         return `
@@ -2036,21 +2325,47 @@ function renderBlogs(blogs) {
                 <div id="comments-${blog._id}" style="display: none; padding: 1rem var(--spacing-lg);">
                     ${currentUser ? `
                     <div class="comment-input-area" style="margin-bottom: 1rem;">
-                        <textarea id="commentInput-${blog._id}" class="comment-input" placeholder="Add a comment..." style="min-height: 40px; padding: 8px 12px; font-size: 0.9rem;"></textarea>
+                        <textarea id="commentInput-${blog._id}" class="comment-input" placeholder="Add a comment... Use @name to mention" style="min-height: 40px; padding: 8px 12px; font-size: 0.9rem;"></textarea>
                         <button class="btn btn-primary btn-sm" style="height: fit-content;" onclick="addInlineComment('${blog._id}')">Post</button>
                     </div>
                     ` : `<p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center;">Log in to join the conversation</p>`}
                     
                     <div class="comments-list">
-                        ${(blog.comments || []).slice().reverse().map(c => `
+                        ${(blog.comments || []).slice().reverse().map(c => {
+                            const cLikes = c.likes || [];
+                            const cIsLiked = currentUser && cLikes.includes(currentUser.user.id);
+                            return `
                             <div class="comment-item" style="gap: 0.75rem; margin-bottom: 0.75rem;">
                                 <div class="author-avatar-sm" style="flex-shrink: 0; width: 32px; height: 32px; font-size: 0.75rem;">${getInitials(c.userName)}</div>
                                 <div class="comment-content" style="padding: 0.5rem 0.75rem;">
                                     <h5 style="margin-bottom: 2px; font-size: 0.85rem;">${escapeHtml(c.userName)}</h5>
-                                    <p style="font-size: 0.9rem; margin:0;">${escapeHtml(c.content)}</p>
+                                    <p style="font-size: 0.9rem; margin:0;">${renderCommentContent(c.content)}</p>
+                                    <div class="comment-actions">
+                                        <button class="comment-action-btn ${cIsLiked ? 'liked' : ''}" onclick="toggleCommentLike('${blog._id}', '${c.id}', this)">
+                                            <svg viewBox="0 0 24 24" fill="${cIsLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                                            <span>${cLikes.length > 0 ? cLikes.length : ''} Like</span>
+                                        </button>
+                                        <button class="comment-action-btn" onclick="toggleReplyInput('${blog._id}', '${c.id}')">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                                            <span>Reply</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        `).join('')}
+                            ${(c.replies || []).length > 0 ? `<div class="comment-replies" style="margin-left: 2rem;">${(c.replies || []).map(r => `
+                                <div class="comment-item" style="gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <div class="author-avatar-sm" style="flex-shrink: 0; width: 26px; height: 26px; font-size: 0.65rem;">${getInitials(r.userName)}</div>
+                                    <div class="comment-content" style="padding: 0.4rem 0.6rem;">
+                                        <h5 style="margin-bottom: 1px; font-size: 0.8rem;">${escapeHtml(r.userName)}</h5>
+                                        <p style="font-size: 0.85rem; margin:0;">${renderCommentContent(r.content)}</p>
+                                    </div>
+                                </div>
+                            `).join('')}</div>` : ''}
+                            <div id="reply-input-${c.id}" class="reply-input-area" style="display: none; margin-left: 2rem;">
+                                <textarea class="comment-input" placeholder="Write a reply..." id="replyInput-${c.id}" style="min-height: 36px; padding: 6px 10px; font-size: 0.85rem;"></textarea>
+                                <button class="btn btn-primary btn-sm" style="height:fit-content; font-size: 0.8rem;" onclick="addReply('${blog._id}', '${c.id}')">Reply</button>
+                            </div>
+                        `;}).join('')}
                     </div>
                 </div>
             </div>
@@ -2098,12 +2413,16 @@ async function editBlogPost(id) {
             document.getElementById('blogTagsInput').value = (blog.tags || []).join(', ');
             document.getElementById('blogContentInput').value = blog.content || '';
 
+            // Load content into the rich editor as HTML
+            const richEditor = document.getElementById('blogContentEditor');
+            if (richEditor && blog.content) {
+                richEditor.innerHTML = typeof marked !== 'undefined'
+                    ? marked.parse(blog.content)
+                    : blog.content;
+            }
+
             const form = document.getElementById('blogForm');
             form.dataset.editId = blog._id;
-
-            // Switch to write tab and update preview if large screen
-            const blogWriteTab = document.getElementById('blogWriteTab');
-            if (blogWriteTab) blogWriteTab.click();
 
             if (window.innerWidth > 1024 && typeof updateBlogPreview === 'function') {
                 updateBlogPreview();
@@ -2148,6 +2467,7 @@ async function loadMyProfile() {
 function renderMyProfile(profile) {
     const content = document.getElementById('myProfileContent');
     const userBlogs = blogs.filter(b => b.author && b.author.id === profile._id);
+    const totalLikes = userBlogs.reduce((sum, b) => sum + (b.likes ? b.likes.length : 0), 0);
     const joinDate = new Date(profile.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     content.innerHTML = `
@@ -2170,7 +2490,7 @@ function renderMyProfile(profile) {
                         <span class="stat-label">Posts</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-value">0</span>
+                        <span class="stat-value">${totalLikes}</span>
                         <span class="stat-label">Likes</span>
                     </div>
                     <div class="stat-item">
@@ -2220,6 +2540,34 @@ function renderMyProfile(profile) {
                         Edit Profile
                     </button>
                 </div>
+
+                ${userBlogs.length > 0 ? `
+                <div style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem;">
+                    <h4 style="font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                        My Posts
+                    </h4>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        ${userBlogs.map(b => `
+                            <div onclick="showBlogDetail('${b._id}')" style="cursor: pointer; padding: 1rem; background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); transition: all 0.2s ease;" onmouseover="this.style.borderColor='var(--color-accent-primary)'; this.style.transform='translateX(4px)';" onmouseout="this.style.borderColor='var(--color-border)'; this.style.transform='translateX(0)';">
+                                <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--color-text-primary);">${escapeHtml(b.title)}</h5>
+                                <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--color-text-muted);">
+                                    <span>${new Date(b.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                    <span>❤️ ${(b.likes || []).length}</span>
+                                    <span>💬 ${(b.comments || []).length}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : `
+                <div style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem; text-align: center; color: var(--color-text-muted);">
+                    <p>You haven't published any posts yet. Start sharing your insights!</p>
+                </div>
+                `}
             </div>
         </div>
     `;
@@ -2340,12 +2688,23 @@ function renderProfiles() {
     }
 
     emptyState.style.display = 'none';
-
     profilesGrid.innerHTML = profiles.map(profile => createProfileCard(profile)).join('');
 
-    // Add event listeners to card buttons
+    // Add click listener to profile card content (to view detail)
+    profilesGrid.querySelectorAll('.profile-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            // Don't trigger if clicking edit/delete buttons
+            if (e.target.closest('.profile-actions')) return;
+            const id = card.dataset.id;
+            const profile = profiles.find(p => p._id === id);
+            if (profile) renderProfileDetail(profile);
+        });
+    });
+
+    // Add event listeners to card buttons (Admin only)
     profilesGrid.querySelectorAll('.btn-edit').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const id = btn.dataset.id;
             const profile = profiles.find(p => p._id === id);
             if (profile) openModal(profile);
@@ -2353,8 +2712,119 @@ function renderProfiles() {
     });
 
     profilesGrid.querySelectorAll('.btn-delete').forEach(btn => {
-        btn.addEventListener('click', () => handleDelete(btn.dataset.id));
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleDelete(btn.dataset.id);
+        });
     });
+}
+
+// Function to handle @mention clicks
+async function viewUserProfile(usernameOrId) {
+    // 1. Switch to profiles tab
+    switchTab('profiles');
+    
+    // 2. Find profile locally or fetch by username
+    let profile = profiles.find(p => p.username === usernameOrId || p._id === usernameOrId);
+    
+    if (!profile) {
+        // Fetch by username if not found locally
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/profiles/username/${usernameOrId}`);
+            const data = await response.json();
+            if (data.success) {
+                profile = data.user;
+            }
+        } catch (e) {
+            console.error('Error fetching user profile:', e);
+        }
+    }
+
+    if (profile) {
+        renderProfileDetail(profile);
+    } else {
+        showToast('User not found', 'error');
+    }
+}
+
+function renderProfileDetail(profile) {
+    const profilesContainer = document.querySelector('.profiles-container');
+    const userBlogs = blogs.filter(b => b.author && b.author.id === profile._id);
+    const totalLikes = userBlogs.reduce((sum, b) => sum + (b.likes ? b.likes.length : 0), 0);
+    const joinDate = new Date(profile.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    // Store the original content to come back later
+    const originalContent = profilesContainer.innerHTML;
+
+    profilesContainer.innerHTML = `
+        <div class="view-header" style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem;">
+            <button class="btn btn-secondary btn-icon" onclick="renderProfiles()" title="Back to Profiles">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h2 style="margin:0; font-size: 1.25rem;">User Profile</h2>
+        </div>
+        
+        <div class="profile-detail-view" style="padding: 0 1.5rem 2rem;">
+            <div class="profile-banner"></div>
+            <div class="profile-detail-content">
+                <div class="profile-image-container large">
+                    ${profile.imageUrl
+                        ? `<img src="${getImageUrl(profile.imageUrl)}" alt="${escapeHtml(profile.name)}">`
+                        : `<div class="profile-initials xl">${getInitials(profile.name)}</div>`
+                    }
+                </div>
+                
+                <h3>${escapeHtml(profile.name)}</h3>
+                <span class="role-badge" style="margin-bottom: 1.5rem; display: inline-block;">${escapeHtml(profile.role || '@' + (profile.username || 'user'))}</span>
+                
+                <div class="profile-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">${userBlogs.length}</span>
+                        <span class="stat-label">Posts</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${totalLikes}</span>
+                        <span class="stat-label">Likes</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">${joinDate}</span>
+                        <span class="stat-label">Joined</span>
+                    </div>
+                </div>
+
+                <div class="profile-info-grid">
+                    <div class="info-group">
+                        <h4>About</h4>
+                        <p>${escapeHtml(profile.bio || 'No professional bio provided.')}</p>
+                    </div>
+                    <div class="info-group">
+                        <h4>Contact</h4>
+                        <p>${escapeHtml(profile.email)}</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: 2rem;">
+                    <h4>Recent Posts</h4>
+                    <div class="user-posts-list">
+                        ${userBlogs.length > 0 
+                            ? userBlogs.slice(0, 5).map(b => `
+                                <div class="post-preview-item" onclick="showBlogDetail('${b._id}')" style="cursor: pointer; padding: 1rem; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 0.75rem; transition: background 0.2s;">
+                                    <h5 style="margin: 0 0 0.25rem 0;">${escapeHtml(b.title)}</h5>
+                                    <span style="font-size: 0.8rem; color: var(--color-text-muted);">${new Date(b.createdAt).toLocaleDateString()}</span>
+                                </div>
+                            `).join('')
+                            : '<p style="color: var(--color-text-muted);">This user hasn\'t posted anything yet.</p>'
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Smooth scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function createProfileCard(profile) {
@@ -2728,6 +3198,85 @@ function getInitials(name) {
         .join('')
         .substring(0, 2)
         .toUpperCase();
+}
+
+// Convert rich editor HTML → Markdown for storage
+function htmlToMarkdown(html) {
+    if (!html || html === '<br>' || html === '<br/>') return '';
+
+    // Use a temporary element to parse
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    function processNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.textContent;
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+        const tag = node.tagName.toLowerCase();
+        const childContent = Array.from(node.childNodes).map(processNode).join('');
+
+        switch (tag) {
+            case 'b':
+            case 'strong':
+                return `**${childContent.trim()}**`;
+            case 'i':
+            case 'em':
+                return `*${childContent.trim()}*`;
+            case 'h1':
+                return `\n# ${childContent.trim()}\n`;
+            case 'h2':
+                return `\n## ${childContent.trim()}\n`;
+            case 'h3':
+                return `\n### ${childContent.trim()}\n`;
+            case 'h4':
+                return `\n#### ${childContent.trim()}\n`;
+            case 'h5':
+                return `\n##### ${childContent.trim()}\n`;
+            case 'h6':
+                return `\n###### ${childContent.trim()}\n`;
+            case 'a': {
+                const href = node.getAttribute('href') || '';
+                return `[${childContent.trim()}](${href})`;
+            }
+            case 'img': {
+                const src = node.getAttribute('src') || '';
+                const alt = node.getAttribute('alt') || '';
+                return `\n![${alt}](${src})\n`;
+            }
+            case 'br':
+                return '\n';
+            case 'p':
+            case 'div':
+                return childContent.trim() ? `\n${childContent.trim()}\n` : '\n';
+            case 'ul':
+            case 'ol':
+                return '\n' + childContent + '\n';
+            case 'li': {
+                const parent = node.parentElement;
+                if (parent && parent.tagName.toLowerCase() === 'ol') {
+                    const idx = Array.from(parent.children).indexOf(node) + 1;
+                    return `${idx}. ${childContent.trim()}\n`;
+                }
+                return `- ${childContent.trim()}\n`;
+            }
+            case 'blockquote':
+                return childContent.trim().split('\n').map(line => `> ${line}`).join('\n') + '\n';
+            case 'code':
+                return `\`${childContent}\``;
+            case 'pre':
+                return `\n\`\`\`\n${childContent.trim()}\n\`\`\`\n`;
+            default:
+                return childContent;
+        }
+    }
+
+    let result = Array.from(temp.childNodes).map(processNode).join('');
+    // Clean up excessive newlines
+    result = result.replace(/\n{3,}/g, '\n\n').trim();
+    return result;
 }
 
 function escapeHtml(text) {
@@ -3136,6 +3685,115 @@ async function addInlineComment(blogId) {
         }
     } catch (err) {
         console.error('Comment error:', err);
+        showToast('Connection error', 'error');
+    }
+}
+
+// Render comment content with @mention highlighting
+function renderCommentContent(content) {
+    let safe = escapeHtml(content);
+    // Highlight @mentions and make them clickable
+    safe = safe.replace(/(^|\s)@(\w+)/g, '$1<span class="comment-mention" onclick="viewUserProfile(\'$2\')" style="cursor: pointer;">@$2</span>');
+    return safe;
+}
+
+// Toggle like on a comment
+async function toggleCommentLike(blogId, commentId, btn) {
+    if (!currentUser) {
+        showToast('Please log in to like comments', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${blogId}/comments/${commentId}/like`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            // Optimistic UI update
+            const isNowLiked = data.isLiked;
+            const likeCount = (data.likes || []).length;
+            if (btn) {
+                btn.classList.toggle('liked', isNowLiked);
+                const svg = btn.querySelector('svg');
+                if (svg) svg.setAttribute('fill', isNowLiked ? 'currentColor' : 'none');
+                const span = btn.querySelector('span');
+                if (span) span.textContent = (likeCount > 0 ? likeCount + ' ' : '') + 'Like';
+            }
+        } else {
+            showToast(data.error || 'Failed to like comment', 'error');
+        }
+    } catch (err) {
+        console.error('Comment like error:', err);
+        showToast('Connection error', 'error');
+    }
+}
+
+// Toggle reply input visibility
+function toggleReplyInput(blogId, commentId) {
+    if (!currentUser) {
+        showToast('Please log in to reply', 'warning');
+        return;
+    }
+    
+    const replyInput = document.getElementById(`reply-input-${commentId}`);
+    if (replyInput) {
+        const isVisible = replyInput.style.display !== 'none';
+        replyInput.style.display = isVisible ? 'none' : 'flex';
+        if (!isVisible) {
+            const textarea = document.getElementById(`replyInput-${commentId}`);
+            if (textarea) textarea.focus();
+        }
+    }
+}
+
+// Add a reply to a comment
+async function addReply(blogId, commentId) {
+    if (!currentUser) {
+        showToast('Please log in to reply', 'warning');
+        return;
+    }
+
+    const replyInput = document.getElementById(`replyInput-${commentId}`);
+    const content = replyInput?.value.trim();
+    if (!content) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${blogId}/comments/${commentId}/reply`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': currentUser.token
+            },
+            body: JSON.stringify({ content })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            replyInput.value = '';
+            showToast('Reply added!', 'success');
+            
+            // Determine context: are we in blog detail or feed?
+            const hash = window.location.hash;
+            if (hash.startsWith('#blog-')) {
+                showBlogDetail(blogId);
+            } else {
+                const oldScrollY = window.scrollY;
+                await loadBlogs();
+                window.scrollTo(0, oldScrollY);
+                const commentsContainer = document.getElementById(`comments-${blogId}`);
+                if (commentsContainer) commentsContainer.style.display = 'block';
+            }
+        } else {
+            showToast(data.error || 'Failed to add reply', 'error');
+        }
+    } catch (err) {
+        console.error('Reply error:', err);
         showToast('Connection error', 'error');
     }
 }

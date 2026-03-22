@@ -1016,7 +1016,7 @@ app.post('/api/users/:id/follow', async (req, res) => {
         // Notify the target user when someone new follows them
         if (!isFollowing) {
             const follower = await collection.findOne({ _id: new ObjectId(currentUserId) });
-            sendPushToUser(updated, '🔔 New Follower!', `${follower?.name || 'Someone'} started following you`, '/', 'follow').catch(() => {});
+            sendPushToUser(updated, '🔔 New Follower!', `${follower?.name || 'Someone'} started following you`, `/#my-profile`, 'follow').catch(() => {});
         }
 
         res.json({
@@ -1488,7 +1488,151 @@ app.post('/api/blogs/:id/comments', checkAuth, async (req, res) => {
             } catch (_) {}
         }
 
+        // Notify mentioned users in the comment
+        const mentionRegex = /@(\w+)/g;
+        let mentionMatch;
+        while ((mentionMatch = mentionRegex.exec(content)) !== null) {
+            try {
+                const mentionedName = mentionMatch[1];
+                const profilesCol = await getProfilesCollection();
+                // Search by name (case-insensitive partial match)
+                const mentionedUser = await profilesCol.findOne({ 
+                    name: { $regex: new RegExp(mentionedName, 'i') },
+                    _id: { $ne: new ObjectId(req.session.userId) } // Don't notify self
+                });
+                if (mentionedUser) {
+                    sendPushToUser(mentionedUser, '💬 You were mentioned!', `${authorName} mentioned you in a comment on "${blog?.title || 'a post'}": "${content.trim().substring(0, 60)}"`, `/#blog-${id}`, 'comment').catch(() => {});
+                }
+            } catch (_) {}
+        }
+
         res.json({ success: true, comment: newComment });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Like/Unlike a comment
+app.post('/api/blogs/:id/comments/:commentId/like', checkAuth, async (req, res) => {
+    try {
+        const { id, commentId } = req.params;
+        const userId = req.session.userId;
+        const collection = await getBlogsCollection();
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+
+        if (!blog) return res.status(404).json({ success: false, error: 'Blog not found' });
+
+        const comment = (blog.comments || []).find(c => c.id === commentId);
+        if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+
+        const likes = comment.likes || [];
+        const isLiked = likes.includes(userId);
+
+        if (isLiked) {
+            // Unlike
+            await collection.updateOne(
+                { _id: new ObjectId(id), 'comments.id': commentId },
+                { $pull: { 'comments.$.likes': userId } }
+            );
+        } else {
+            // Like
+            await collection.updateOne(
+                { _id: new ObjectId(id), 'comments.id': commentId },
+                { $addToSet: { 'comments.$.likes': userId } }
+            );
+
+            // Notify comment author (not self-likes)
+            if (comment.userId && comment.userId !== userId) {
+                try {
+                    const profilesCol = await getProfilesCollection();
+                    const [liker, commentAuthor] = await Promise.all([
+                        profilesCol.findOne({ _id: new ObjectId(userId) }),
+                        profilesCol.findOne({ _id: new ObjectId(comment.userId) })
+                    ]);
+                    if (commentAuthor) {
+                        sendPushToUser(commentAuthor, '❤️ Comment Liked!', `${liker?.name || 'Someone'} liked your comment on "${blog.title}"`, `/#blog-${id}`, 'like').catch(() => {});
+                    }
+                } catch (_) {}
+            }
+        }
+
+        const updatedBlog = await collection.findOne({ _id: new ObjectId(id) });
+        const updatedComment = (updatedBlog.comments || []).find(c => c.id === commentId);
+
+        res.json({ success: true, likes: updatedComment?.likes || [], isLiked: !isLiked });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Reply to a comment
+app.post('/api/blogs/:id/comments/:commentId/reply', checkAuth, async (req, res) => {
+    try {
+        const { id, commentId } = req.params;
+        const { content } = req.body;
+
+        if (!content || !content.trim()) {
+            return res.status(400).json({ success: false, error: 'Reply content is required' });
+        }
+
+        const profilesCollection = await getProfilesCollection();
+        let authorName = 'Anonymous';
+        try {
+            const authorProfile = await profilesCollection.findOne(
+                { _id: new ObjectId(req.session.userId) },
+                { projection: { name: 1 } }
+            );
+            if (authorProfile) authorName = authorProfile.name;
+        } catch (_) {}
+
+        const collection = await getBlogsCollection();
+        const blog = await collection.findOne({ _id: new ObjectId(id) });
+        if (!blog) return res.status(404).json({ success: false, error: 'Blog not found' });
+
+        const comment = (blog.comments || []).find(c => c.id === commentId);
+        if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
+
+        const newReply = {
+            id: new ObjectId().toString(),
+            userId: req.session.userId,
+            userName: authorName,
+            content: content.trim(),
+            createdAt: new Date(),
+            likes: []
+        };
+
+        await collection.updateOne(
+            { _id: new ObjectId(id), 'comments.id': commentId },
+            { $push: { 'comments.$.replies': newReply } }
+        );
+
+        // Notify the original comment author (not self-replies)
+        if (comment.userId && comment.userId !== req.session.userId) {
+            try {
+                const commentAuthor = await profilesCollection.findOne({ _id: new ObjectId(comment.userId) });
+                if (commentAuthor) {
+                    sendPushToUser(commentAuthor, '💬 New Reply!', `${authorName} replied to your comment on "${blog.title}": "${content.trim().substring(0, 60)}"`, `/#blog-${id}`, 'comment').catch(() => {});
+                }
+            } catch (_) {}
+        }
+
+        // Notify mentioned users in the reply
+        const mentionRegex = /@(\w+)/g;
+        let mentionMatch;
+        while ((mentionMatch = mentionRegex.exec(content)) !== null) {
+            try {
+                const mentionedName = mentionMatch[1];
+                const mentionedUser = await profilesCollection.findOne({
+                    name: { $regex: new RegExp(mentionedName, 'i') },
+                    _id: { $ne: new ObjectId(req.session.userId) }
+                });
+                if (mentionedUser) {
+                    sendPushToUser(mentionedUser, '💬 You were mentioned!', `${authorName} mentioned you in a reply: "${content.trim().substring(0, 60)}"`, `/#blog-${id}`, 'comment').catch(() => {});
+                }
+            } catch (_) {}
+        }
+
+        res.json({ success: true, reply: newReply });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

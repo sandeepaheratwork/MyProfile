@@ -461,12 +461,42 @@
         <div class="modal modal-lg">
             <div class="modal-header">
                 <h2>Create New Post</h2>
-                <button class="modal-close" id="closeBlogModal">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                </button>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <!-- Mobile Preview Button (eye icon) - hidden on desktop via CSS -->
+                    <button type="button" class="modal-close" id="mobilePreviewBtn" title="Preview Post"
+                        style="display: none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                    <button class="modal-close" id="closeBlogModal">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Full-Screen Preview Overlay -->
+            <div class="mobile-preview-overlay" id="mobilePreviewOverlay">
+                <div class="mobile-preview-header">
+                    <button type="button" class="btn btn-secondary btn-sm" id="mobilePreviewBackBtn"
+                        style="display: flex; align-items: center; gap: 4px; font-size: 0.85rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="width: 16px; height: 16px;">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        Back to Editor
+                    </button>
+                    <h3>Post Preview</h3>
+                    <div style="width: 90px;"></div> <!-- Spacer for centering -->
+                </div>
+                <div class="mobile-preview-body markdown-body" id="mobilePreviewContent">
+                    <p style="color: var(--color-text-muted); text-align: center; margin-top: 2rem;">
+                        Write something to see the preview...</p>
+                </div>
             </div>
             <div class="modal-tabs editor-tabs"
                 style="display: flex; gap: 1rem; margin: 0 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--color-border);">
@@ -548,9 +578,13 @@
                             </div>
                             <input type="file" id="blogImageInput" accept="image/*" style="display: none;">
                         </div>
+                        <!-- WYSIWYG Rich Text Editor -->
+                        <div id="blogContentEditor" contenteditable="true" class="form-input form-textarea rich-editor"
+                            style="flex: 1; min-height: 400px; font-family: inherit; line-height: 1.6; font-size: 0.95rem; background: var(--color-bg-tertiary); overflow-y: auto; outline: none; white-space: pre-wrap; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md);"
+                            data-placeholder="Write your post here... Use the toolbar to format text."></div>
+                        <!-- Hidden textarea to store markdown for submission -->
                         <textarea id="blogContentInput" class="form-input form-textarea"
-                            style="flex: 1; min-height: 400px; font-family: 'JetBrains Mono', 'Fira Code', monospace; line-height: 1.6; font-size: 0.95rem; background: var(--color-bg-tertiary);"
-                            placeholder="Write your technical insight here... Markdown supported! Drop images directly into this area."
+                            style="display: none !important;"
                             required></textarea>
                     </div>
 
