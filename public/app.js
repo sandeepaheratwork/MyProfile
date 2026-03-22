@@ -2049,6 +2049,16 @@ async function showBlogDetail(id, pushState = true) {
                             </svg>
                             Back to Insights
                         </button>
+                        <button class="btn btn-secondary btn-sm" onclick="shareBlog('${blog.title.replace(/'/g, "\\'")}', '${blog._id}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                            </svg>
+                            Share
+                        </button>
                         <button class="btn btn-primary btn-sm ai-explain-btn" onclick="toggleChat(); chatInput.value = 'Can you explain the key takeaways from the blog post \\'${escapeHtml(blog.title)}\\'?'; handleChatSubmit(new Event('submit'));">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
                                 <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
@@ -2112,7 +2122,7 @@ async function showBlogDetail(id, pushState = true) {
                                     </svg>
                                     ${blog.comments ? blog.comments.length : 0} Comments
                                 </button>
-                                <button class="interaction-btn share-btn" onclick="shareBlog('${blog.title.replace(/'/g, "\\'")}')">
+                                <button class="interaction-btn share-btn" onclick="shareBlog('${blog.title.replace(/'/g, "\\'")}', '${blog._id}')">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <circle cx="18" cy="5" r="3"></circle>
                                         <circle cx="6" cy="12" r="3"></circle>
@@ -3799,21 +3809,63 @@ async function addReply(blogId, commentId) {
 }
 
 async function shareBlog(title, blogId) {
-    // Generate the specific URL to this blog instead of sharing the generic site root
-    const shareUrl = `${window.location.origin}${window.location.pathname}?id=${blogId}#blogs`;
+    // 1. Determine the base URL. If we're on localhost or in Capacitor, use the production one.
+    const productionUrl = 'https://profile-ui-ghfjj7iuaa-uc.a.run.app';
     
+    // We use the isCapacitor flag we already have at the top of the file
+    // Also checking for window.Capacitor as a double safety
+    const shouldForceProduction = isCapacitor || 
+                                 window.location.hostname === 'localhost' || 
+                                 window.location.hostname === '127.0.0.1' ||
+                                 window.location.protocol === 'capacitor:';
+
+    const currentOrigin = shouldForceProduction ? productionUrl : window.location.origin;
+    
+    // 2. Build the deep-link URL
+    const shareUrl = `${currentOrigin}${window.location.pathname}?id=${blogId}#blogs`;
+    
+    // 3. Use Native Share if available (iOS, Android, and Desktop Chrome/Safari)
     if (navigator.share) {
         try {
             await navigator.share({
-                title: title,
+                title: title || 'Check out this post on TechForge',
+                text: `I thought you might find this interesting: "${title}"`,
                 url: shareUrl
             });
+            console.log('✅ Successfully shared');
         } catch (err) {
-            console.log('Share canceled or failed', err);
+            if (err.name !== 'AbortError') {
+                console.error('❌ Share failed:', err);
+                // Fallback to clipboard if share fails unexpectedly
+                copyToClipboard(shareUrl);
+            }
         }
     } else {
-        navigator.clipboard.writeText(shareUrl);
-        showToast('Link copied to clipboard!', 'success');
+        // Fallback for browsers without native share (e.g. older Desktop browsers)
+        copyToClipboard(shareUrl);
+    }
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Link copied to clipboard!', 'success');
+        }).catch(err => {
+            console.error('Failed to copy', err);
+        });
+    } else {
+        // Old school fallback
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('Link copied to clipboard!', 'success');
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+        document.body.removeChild(textArea);
     }
 }
 
