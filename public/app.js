@@ -3825,23 +3825,34 @@ async function shareBlog(title, blogId) {
     const shareUrl = `${currentOrigin}${window.location.pathname}?id=${blogId}#blogs`;
     
     // 3. Use Native Share if available (iOS, Android, and Desktop Chrome/Safari)
-    if (navigator.share) {
+    // Priority: Capacitor Plugin (Native App) -> navigator.share (Modern Browser) -> Clipboard (Fallback)
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) {
+        try {
+            await window.Capacitor.Plugins.Share.share({
+                title: title || 'Check out this post on TechForge',
+                text: `I thought you might find this interesting: "${title}"`,
+                url: shareUrl,
+                dialogTitle: 'Share with'
+            });
+            console.log('✅ Native Share Successful');
+        } catch (err) {
+            console.warn('Native share error:', err);
+        }
+    } else if (navigator.share) {
         try {
             await navigator.share({
                 title: title || 'Check out this post on TechForge',
                 text: `I thought you might find this interesting: "${title}"`,
                 url: shareUrl
             });
-            console.log('✅ Successfully shared');
+            console.log('✅ navigator.share Successful');
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('❌ Share failed:', err);
-                // Fallback to clipboard if share fails unexpectedly
                 copyToClipboard(shareUrl);
             }
         }
     } else {
-        // Fallback for browsers without native share (e.g. older Desktop browsers)
         copyToClipboard(shareUrl);
     }
 }

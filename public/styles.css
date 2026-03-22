@@ -1407,12 +1407,15 @@ body {
 
     /* Scrollable form body */
     #blogModal .modal-form {
+        display: flex !important;
+        flex-direction: column !important;
         flex: 1 1 auto !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch;
         padding: var(--spacing-md) var(--spacing-lg);
-        min-height: 0 !important; /* Critical for flex scroll */
+        min-height: 0 !important;
+        position: relative;
     }
 
     /* Override inline min-height on editor-container that pushes buttons off-screen */
@@ -1447,16 +1450,18 @@ body {
         display: none !important;
     }
 
-    /* Publish bar at the bottom of the form */
+    /* Publish bar at the bottom of the form - Floating Fixed on Mobile */
     #blogModal .modal-actions {
         flex-shrink: 0 !important;
-        position: relative !important;
-        background: var(--color-bg-secondary);
+        position: sticky !important;
+        bottom: 0 !important;
+        background: var(--color-bg-primary);
         border-top: 1px solid var(--color-border);
-        margin-top: var(--spacing-md) !important;
+        margin: 0 !important;
         padding: var(--spacing-md) var(--spacing-lg);
-        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px));
-        z-index: 10;
+        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 10px));
+        z-index: 100;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
     }
     /* ======= End LinkedIn-style Post modal ======= */
 
