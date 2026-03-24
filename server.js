@@ -68,6 +68,24 @@ webpush.setVapidDetails(
 );
 console.log('✅ Web Push (VAPID) initialized');
 
+// ==========================================
+// Resend SDK — for email notifications
+// ==========================================
+let resendClient = null;
+try {
+    const { Resend } = require('resend');
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+    if (RESEND_API_KEY) {
+        resendClient = new Resend(RESEND_API_KEY);
+        console.log('✅ Resend initialized for email notifications');
+    } else {
+        console.warn('⚠️  RESEND_API_KEY not set — email notifications disabled');
+    }
+} catch (e) {
+    console.warn('⚠️  Resend init failed:', e.message);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -856,6 +874,29 @@ async function sendPushToUser(targetUser, title, body, url = '/', type = 'info')
         }
     }
 
+    // === 4. Email notification via Resend ===
+    if (resendClient && targetUser.email) {
+        try {
+            await resendClient.emails.send({
+                from: 'TechForge Notifications <onboarding@resend.dev>',
+                to: targetUser.email,
+                subject: title,
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h2 style="color: #333;">${title}</h2>
+                        <p style="font-size: 16px; color: #555; line-height: 1.5;">${body}</p>
+                        ${url ? `<a href="https://myprofile.com${url}" style="display: inline-block; padding: 10px 20px; background: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px;">View Details</a>` : ''}
+                        <hr style="margin-top: 30px; border: 0; border-top: 1px solid #eee;" />
+                        <p style="font-size: 12px; color: #999;">You received this because email notifications are enabled for your account.</p>
+                    </div>
+                `
+            });
+        } catch (e) {
+            errors.push(`Resend: ${e.message}`);
+            console.error('Email failed:', e.message);
+        }
+    }
+
     if (errors.length) console.warn('Push notification errors:', errors);
 }
 
@@ -1072,6 +1113,66 @@ app.get('/api/users/:id/following', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// GET /api/users/:id/network — Aggregate network data (Manage, Grow, Catch-up)
+app.get('/api/users/:id/network', async (req, res) => {
+    try {
+        const token = req.headers['x-auth-token'];
+        const session = verifyToken(token);
+        if (!session) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const id = req.params.id;
+        const currentUserId = session.userId;
+        const profilesCol = await getProfilesCollection();
+        const blogsCol = await getBlogsCollection();
+
+        // 1. Get user profile to see who they follow
+        const user = await profilesCol.findOne({ _id: new ObjectId(id) });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        // 2. Fetch following/followers details
+        const followingIds = (user.following || []).map(sid => {
+            try { return new ObjectId(sid); } catch(e) { return null; }
+        }).filter(Boolean);
+        const followerIds = (user.followers || []).map(sid => {
+            try { return new ObjectId(sid); } catch(e) { return null; }
+        }).filter(Boolean);
+
+        const [following, followers] = await Promise.all([
+            profilesCol.find({ _id: { $in: followingIds } }, { projection: { password: 0 } }).toArray(),
+            profilesCol.find({ _id: { $in: followerIds } }, { projection: { password: 0 } }).toArray()
+        ]);
+
+        // 3. Suggestions (Grow) — profiles not already followed and not self
+        const suggestions = await profilesCol.find({
+            _id: { $nin: [...followingIds, new ObjectId(currentUserId)] }
+        }, { projection: { password: 0 } }).limit(8).toArray();
+
+        // 4. Catch up — Recent blogs from network (last 30 days)
+        const catchUpBlogs = await blogsCol.find({
+            'author.id': { $in: (user.following || []).map(id => id.toString()) },
+            createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        }).sort({ createdAt: -1 }).limit(10).toArray();
+
+        res.json({
+            success: true,
+            manage: {
+
+                followingCount: following.length,
+                followersCount: followers.length,
+                followingDetail: following.slice(0, 5), // Return teaser list for dashboard
+                followersDetail: followers.slice(0, 5)
+            },
+            suggestions,
+            catchUp: catchUpBlogs
+        });
+    } catch (error) {
+        console.error('Network fetch error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
 
 // ==========================================
 // Blog API Routes
@@ -1660,8 +1761,31 @@ app.post('/api/forgot-password', async (req, res) => {
             { $set: { resetToken: token, resetTokenExpiry: expiry } }
         );
 
-        // In a real app, send email here. For now, return the token in the response
-        res.json({ success: true, message: 'Reset code generated', token });
+        // In a real app, send email here.
+        if (resendClient) {
+            try {
+                await resendClient.emails.send({
+                    from: 'TechForge Support <onboarding@resend.dev>',
+                    to: email,
+                    subject: 'Reset your password',
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                            <h2 style="color: #333;">Password Reset Request</h2>
+                            <p style="font-size: 16px; color: #555; line-height: 1.5;">You requested a password reset. Use the following 6-digit code to reset your password:</p>
+                            <div style="font-size: 32px; font-weight: bold; color: #0070f3; padding: 20px; background: #f0f7ff; border-radius: 10px; text-align: center; margin: 20px 0;">
+                                ${token}
+                            </div>
+                            <p style="font-size: 14px; color: #999;">This code will expire in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+                        </div>
+                    `
+                });
+            } catch (e) {
+                console.error('Failed to send reset email:', e.message);
+                // We still return the token in the response for demo purposes if email fails
+            }
+        }
+
+        res.json({ success: true, message: 'Reset code generated and sent to your email', token });
 
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

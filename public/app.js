@@ -5,8 +5,12 @@
 
 // API Base URL
 // Check strictly for localhost without port string to avoid blocking local webdev envs (e.g http://localhost:3001)
-const isCapacitor = window.location.protocol === 'capacitor:' || window.location.origin === 'http://localhost' || window.location.origin === 'https://localhost' || window.location.origin === 'capacitor://localhost';
+const isCapacitor = window.location.protocol === 'capacitor:' || 
+                   window.location.origin.includes('localhost') || 
+                   window.location.origin.includes('127.0.0.1') || 
+                   window.location.origin === 'capacitor://localhost';
 const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
+
 const API_URL = `${API_BASE_URL}/api/profiles`;
 
 // Image URL Helper
@@ -53,6 +57,7 @@ let profiles = [];
 let blogs = []; // Store blogs globally for count
 let searchDebounceTimer = null;
 let currentUser = null; // Stores { token, user }
+let networkData = null; // Global cache for network info
 
 // ========================================
 
@@ -356,6 +361,9 @@ function setupEventListeners() {
     });
 
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
 
     if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1367,13 +1375,16 @@ function handleRouting() {
         switchTab('profiles', false);
     } else if (hash === '#my-profile') {
         switchTab('my-profile', false);
+    } else if (hash === '#network') {
+        switchTab('network', false);
     } else {
         // Default to blogs
         switchTab('blogs', false);
     }
 }
 
-function switchTab(tabId, pushState = true) {
+
+function switchTab(tabId, pushState = true, loadData = true) {
     const blogsSection = document.getElementById('blogsSection');
     const profilesSection = document.getElementById('profilesSection');
     const searchSection = document.getElementById('searchSection');
@@ -1398,23 +1409,33 @@ function switchTab(tabId, pushState = true) {
     profilesSection.style.display = 'none';
     searchSection.style.display = 'none';
     myProfileSection.style.display = 'none';
+    const networkSectionDefault = document.getElementById('networkSection');
+    if (networkSectionDefault) networkSectionDefault.style.display = 'none';
     
     const blogStickyHeader = document.getElementById('blogStickyHeader');
     if (blogStickyHeader) blogStickyHeader.style.display = 'none';
 
+
     if (tabId === 'blogs') {
         blogsSection.style.display = 'block';
         if (blogStickyHeader) blogStickyHeader.style.display = 'flex';
-        loadBlogs();
+        if (loadData) loadBlogs();
     } else if (tabId === 'profiles') {
         profilesSection.style.display = 'block';
         searchSection.style.display = 'block';
-        loadProfiles();
+        if (loadData) loadProfiles();
     } else if (tabId === 'my-profile') {
         myProfileSection.style.display = 'block';
-        loadMyProfile();
+        if (loadData) loadMyProfile();
+    } else if (tabId === 'network') {
+        const networkSection = document.getElementById('networkSection');
+        if (networkSection) {
+            networkSection.style.display = 'block';
+            if (loadData) loadNetwork();
+        }
     }
 }
+
 
 function closeChangePasswordModal() {
     document.getElementById('changePasswordModal').classList.remove('active');
@@ -1630,9 +1651,18 @@ function updateUIForRole(switchView = true) {
         }
         if (userProfileTab) userProfileTab.style.display = 'flex';
         
+        const networkTab = document.getElementById('networkTab');
+        const bottomNetworkBtn = document.getElementById('bottomNetworkBtn');
+        if (networkTab) networkTab.style.display = 'flex';
+        if (bottomNetworkBtn) bottomNetworkBtn.style.display = 'flex';
+        
         // All logged-in users can create posts
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
-        if (switchView) switchTab('blogs');
+        // Default view on first load or login if no other session tab active
+        if (switchView && (!window.location.hash || window.location.hash === '#')) {
+            switchTab('blogs');
+        }
+
     } else {
         // Guest: show login button, hide user actions
         if (loginBtn) loginBtn.style.display = 'flex';
@@ -1640,6 +1670,12 @@ function updateUIForRole(switchView = true) {
         if (adminBadge) adminBadge.style.display = 'none';
         if (changePasswordBtn) changePasswordBtn.style.display = 'none';
         if (notificationBellWrap) notificationBellWrap.style.display = 'none';
+        
+        const networkTab = document.getElementById('networkTab');
+        const bottomNetworkBtn = document.getElementById('bottomNetworkBtn');
+        if (networkTab) networkTab.style.display = 'none';
+        if (bottomNetworkBtn) bottomNetworkBtn.style.display = 'none';
+        
         mainNavTabs.style.display = 'none';
 
         // Clear notification polling
@@ -1650,18 +1686,32 @@ function updateUIForRole(switchView = true) {
 
         // Guests can see blogs and are shown New Post to encourage registration
         if (newBlogBtn) newBlogBtn.style.display = 'flex';
-        if (switchView) switchTab('blogs');
+        if (switchView && (!window.location.hash || window.location.hash === '#')) {
+            switchTab('blogs');
+        }
+
     }
 
-    if (isCapacitor && mobileBottomNav) {
+    // Bottom Nav visibility for mobile
+    const isMobileView = window.innerWidth <= 768 || isCapacitor;
+    if (isMobileView && mobileBottomNav) {
         mobileBottomNav.style.display = 'flex';
+        
         // Hide specific buttons if not logged in
         const bottomNewPostBtn = document.getElementById('bottomNewPostBtn');
         const bottomNotifBtn = document.getElementById('bottomNotifBtn');
+        const bottomNetworkBtn = document.getElementById('bottomNetworkBtn');
+        const bottomProfileTab = document.getElementById('bottomProfileTab');
+        
         if (bottomNewPostBtn) bottomNewPostBtn.style.display = currentUser ? 'flex' : 'none';
         if (bottomNotifBtn) bottomNotifBtn.style.display = currentUser ? 'flex' : 'none';
+        if (bottomNetworkBtn) bottomNetworkBtn.style.display = currentUser ? 'flex' : 'none';
+        if (bottomProfileTab) bottomProfileTab.style.display = currentUser ? 'flex' : 'none';
+    } else if (mobileBottomNav) {
+        mobileBottomNav.style.display = 'none';
     }
 }
+
 
 function openBlogModal() {
     if (!currentUser) {
@@ -2451,6 +2501,202 @@ async function editBlogPost(id) {
     }
 }
 
+// ==========================================
+// Network Functions
+// ==========================================
+
+async function loadNetwork() {
+    if (!currentUser || !currentUser.user) return;
+    const networkSection = document.getElementById('networkSection');
+    if (!networkSection) return;
+
+    const userId = currentUser.user.id || currentUser.user._id;
+    if (!userId) {
+        console.warn('Network load skipped: No user ID found');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/api/users/${userId}/network`, {
+            headers: { 'x-auth-token': currentUser.token || '' }
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Server error: ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (data.success) {
+            networkData = data;
+            renderNetwork(data);
+        } else {
+            throw new Error(data.error || 'Failed to fetch network data');
+        }
+    } catch (e) {
+        console.error('Failed to load network', e);
+        showToast(`Failed to load network: ${e.message}`, 'error');
+    }
+}
+
+
+function renderNetwork(data) {
+    const followingCount = document.getElementById('networkFollowingCount');
+    const followersCount = document.getElementById('networkFollowersCount');
+    const catchUpFeed = document.getElementById('catchUpFeed');
+    const networkSuggestions = document.getElementById('networkSuggestions');
+
+    if (followingCount) followingCount.textContent = data.manage.followingCount;
+    if (followersCount) followersCount.textContent = data.manage.followersCount;
+
+    // Render Grow (Suggestions)
+    if (networkSuggestions) {
+        if (!data.suggestions || data.suggestions.length === 0) {
+            networkSuggestions.innerHTML = '<p class="empty-notif" style="grid-column: 1/-1; padding: 2rem; text-align: center;">No suggestions at the moment.</p>';
+        } else {
+            networkSuggestions.innerHTML = data.suggestions.map(prof => `
+                <div class="suggestion-card">
+                    <div class="suggestion-avatar">
+                        ${prof.imageUrl ? `<img src="${getImageUrl(prof.imageUrl)}" alt="${prof.name}">` : getInitials(prof.name)}
+                    </div>
+                    <div class="suggestion-info">
+                        <h4>${escapeHtml(prof.name)}</h4>
+                        <p>${escapeHtml(prof.role || 'Professional')}</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm follow-btn" data-id="${prof._id}" style="width: 100%; margin-top: auto;">
+                        Follow
+                    </button>
+                </div>
+            `).join('');
+
+            // Add follow listeners
+            networkSuggestions.querySelectorAll('.follow-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const targetBtn = e.target.closest('.follow-btn');
+                    const targetId = targetBtn.dataset.id;
+                    targetBtn.classList.add('loading');
+                    const success = await handleFollowToggle(targetId);
+                    if (success) {
+                        showToast('Following updated', 'success');
+                        loadNetwork(); // Refresh network
+                    } else {
+                        targetBtn.classList.remove('loading');
+                    }
+                });
+            });
+        }
+    }
+
+    // Render Catch Up (Recent Blogs from network)
+    if (catchUpFeed) {
+        if (!data.catchUp || data.catchUp.length === 0) {
+            catchUpFeed.innerHTML = '<p class="empty-notif" style="text-align: center; color: var(--color-text-muted); padding: 2.5rem; border: 1px dashed var(--color-border); border-radius: var(--radius-md);">No recent activity from your network yet.<br><small>Follow more technical bloggers to see their latest insights here.</small></p>';
+        } else {
+            catchUpFeed.innerHTML = data.catchUp.map(blog => `
+                <div class="catch-up-item">
+                    <div class="catch-up-avatar">
+                         ${blog.author?.imageUrl ? `<img src="${getImageUrl(blog.author.imageUrl)}" alt="${blog.author.name}">` : getInitials(blog.author?.name || 'U')}
+                    </div>
+                    <div class="catch-up-content">
+                        <p class="catch-up-text"><strong>${escapeHtml(blog.author?.name || 'Someone')}</strong> published a new blog:</p>
+                        <p class="catch-up-text" style="color: var(--color-accent-primary); font-weight: 500;">"${escapeHtml(blog.title)}"</p>
+                        <p class="catch-up-time">${timeAgo(blog.createdAt)}</p>
+                    </div>
+                    <div class="catch-up-action">
+                        <button class="btn btn-secondary btn-sm" onclick="window.location.hash = '#blog-${blog._id}'">Read Post</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+}
+
+// Simple time-ago formatter
+function timeAgo(date) {
+    if (!date) return '';
+    try {
+        const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+        if (isNaN(seconds)) return '';
+        
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + "y";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + "mo";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + "d";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + "h";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + "m";
+        return Math.floor(seconds) + "s";
+    } catch (e) {
+        return '';
+    }
+}
+
+async function showNetworkDetails(type) {
+    if (!currentUser || !currentUser.user) return;
+    const userId = currentUser.user.id || currentUser.user._id;
+    if (!userId) return;
+
+    const title = type === 'following' ? 'People I Follow' : 'Profiles Following Me';
+    
+    // UI feedback
+    showToast('Loading ' + type + '...', 'info');
+
+    try {
+        // Use existing following/followers endpoints
+        const res = await fetch(`${API_BASE_URL}/api/users/${userId}/${type}`, {
+            headers: { 'x-auth-token': currentUser.token || '' }
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            // Switch to a specialized profiles view
+            switchTab('profiles', false, false);
+            
+            // Override the header title
+            const sectionHeader = document.querySelector('#profilesSection .section-header h2');
+            if (sectionHeader) sectionHeader.textContent = title;
+            
+            // Render the fetched network list using the standard renderProfiles
+            // We use the data[type] field because the API returns { following: [...] } or { followers: [...] }
+            const listToRender = data[type] || [];
+            renderProfiles(listToRender);
+            
+            // Add a "Back to My Network" button at the top
+            const profilesGrid = document.getElementById('profilesGrid');
+            const existingBackBtn = document.getElementById('networkBackBtn');
+            if (existingBackBtn) existingBackBtn.remove();
+            
+            const backBtn = document.createElement('button');
+            backBtn.id = 'networkBackBtn';
+            backBtn.className = 'btn btn-secondary btn-sm';
+            backBtn.style.marginBottom = '1.5rem';
+            backBtn.style.display = 'flex';
+            backBtn.style.alignItems = 'center';
+            backBtn.style.gap = '8px';
+            backBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Back to My Network
+            `;
+            backBtn.onclick = () => {
+                const h2 = document.querySelector('#profilesSection .section-header h2');
+                if (h2) h2.textContent = 'All Professional Profiles';
+                switchTab('network');
+                backBtn.remove();
+            };
+            profilesGrid.parentNode.insertBefore(backBtn, profilesGrid);
+        }
+    } catch (e) {
+        console.error('List fetch failed', e);
+        showToast('Failed to fetch list', 'error');
+    }
+}
+
 async function loadMyProfile() {
     const content = document.getElementById('myProfileContent');
 
@@ -2552,6 +2798,14 @@ function renderMyProfile(profile) {
                         </svg>
                         Edit Profile
                     </button>
+                    <button class="btn btn-danger" onclick="handleLogout()" style="width: 100%; margin-top: 1rem; border-style: dashed; background: rgba(239, 68, 68, 0.05);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        Logout
+                    </button>
                 </div>
 
                 ${userBlogs.length > 0 ? `
@@ -2587,14 +2841,25 @@ function renderMyProfile(profile) {
 }
 
 function handleLogout() {
-    if (!confirm('Are you sure you want to log out?')) return;
-
+    // Note: Native confirm() removed to prevent issues with blocked dialogs on mobile
     currentUser = null;
-    // Clear all possible session keys (belt-and-suspenders)
+    
+    // Clear all possible session keys to ensure no state persists
     localStorage.removeItem('adminSession');
     localStorage.removeItem('currentUser');
-    // Using explicit href fixes Android Capacitor Webview white screen on reload
-    window.location.href = 'index.html';
+    
+    // Force immediate UI update to give snappy feedback
+    updateUIForRole(false);
+    
+    // Attempt to show a toast message before reload
+    if (typeof showToast === 'function') {
+        showToast('Logged out successfully', 'info');
+    }
+
+    // Force a clean reload. Using 'index.html' explicitly for stability in mobile/Capacitor webviews.
+    setTimeout(() => {
+        window.location.href = 'index.html';
+    }, 400);
 }
 
 // ========================================
@@ -2691,17 +2956,18 @@ async function deleteProfile(id) {
 // UI Functions
 // ========================================
 
-function renderProfiles() {
-    profileCount.textContent = profiles.length;
+function renderProfiles(list = null) {
+    const profilesToRender = list || profiles;
+    profileCount.textContent = profilesToRender.length;
 
-    if (profiles.length === 0) {
+    if (profilesToRender.length === 0) {
         profilesGrid.innerHTML = '';
         emptyState.style.display = 'block';
         return;
     }
 
     emptyState.style.display = 'none';
-    profilesGrid.innerHTML = profiles.map(profile => createProfileCard(profile)).join('');
+    profilesGrid.innerHTML = profilesToRender.map(profile => createProfileCard(profile)).join('');
 
     // Add click listener to profile card content (to view detail)
     profilesGrid.querySelectorAll('.profile-card').forEach(card => {
@@ -2709,7 +2975,7 @@ function renderProfiles() {
             // Don't trigger if clicking edit/delete buttons
             if (e.target.closest('.profile-actions')) return;
             const id = card.dataset.id;
-            const profile = profiles.find(p => p._id === id);
+            const profile = profilesToRender.find(p => p._id === id);
             if (profile) renderProfileDetail(profile);
         });
     });

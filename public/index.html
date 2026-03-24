@@ -97,6 +97,15 @@
                 </svg>
                 Technical Blogs
             </button>
+            <button class="nav-tab" data-tab="network" id="networkTab" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                My Network
+            </button>
             <button class="nav-tab" data-tab="my-profile" id="userProfileTab" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 21a8 8 0 1 0-16 0" />
@@ -162,6 +171,79 @@
                 <div class="loading-state">
                     <div class="spinner"></div>
                     <p>Loading your profile...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Network Section -->
+        <section class="network-section" id="networkSection" style="display: none;">
+            <div class="section-header" style="margin-bottom: 1.5rem;">
+                <h2>My Network</h2>
+            </div>
+            <div class="network-layout">
+                <!-- Sidebar -->
+                <aside class="network-sidebar">
+                    <div class="network-card">
+                        <div class="card-header">
+                            <h3 style="font-size: 1rem; margin: 0;">Manage my network</h3>
+                        </div>
+                        <ul class="network-nav">
+                            <li>
+                                <button class="network-nav-item" onclick="showNetworkDetails('following')">
+                                    <div class="nav-item-content">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="8.5" cy="7" r="4"></circle>
+                                            <polyline points="17 11 19 13 23 9"></polyline>
+                                        </svg>
+                                        <span>Following</span>
+                                    </div>
+                                    <span class="count" id="networkFollowingCount">0</span>
+                                </button>
+                            </li>
+                            <li>
+                                <button class="network-nav-item" onclick="showNetworkDetails('followers')">
+                                    <div class="nav-item-content">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="9" cy="7" r="4"></circle>
+                                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                        </svg>
+                                        <span>Followers</span>
+                                    </div>
+                                    <span class="count" id="networkFollowersCount">0</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </aside>
+
+                <!-- Main Content -->
+                <div class="network-main">
+                    <!-- Catch Up Section -->
+                    <div class="network-card catch-up-section" style="margin-bottom: 1.5rem;">
+                        <div class="card-header">
+                            <h3 style="font-size: 1.125rem; margin: 0;">Catch up</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;">Recent updates from people you follow</p>
+                        </div>
+                        <div id="catchUpFeed" class="catch-up-feed">
+
+                            <div class="loading-state active"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Grow Section -->
+                    <div class="network-card grow-section">
+                        <div class="card-header">
+                            <h3 style="font-size: 1.125rem; margin: 0;">Grow your network</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;">Profiles you might find interesting</p>
+                        </div>
+                        <div id="networkSuggestions" class="suggestions-grid">
+                            <div class="loading-state active"><div class="spinner"></div></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </section>
@@ -711,6 +793,15 @@
             </svg>
             <span>Home</span>
         </button>
+        <button class="bottom-nav-item" data-tab="network" id="bottomNetworkBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Network</span>
+        </button>
         <button class="bottom-nav-item" id="bottomNewPostBtn">
             <div class="plus-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -730,7 +821,15 @@
             </div>
             <span>Notif</span>
         </button>
+        <button class="bottom-nav-item" data-tab="my-profile" id="bottomProfileTab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Profile</span>
+        </button>
     </nav>
+
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pulltorefreshjs/0.1.22/index.umd.min.js"></script>
     <script src="app.js"></script>
