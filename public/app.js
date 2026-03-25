@@ -6,10 +6,11 @@
 // API Base URL
 // Check strictly for localhost without port string to avoid blocking local webdev envs (e.g http://localhost:3001)
 const isCapacitor = window.location.protocol === 'capacitor:' || 
-                   window.location.origin.includes('localhost') || 
-                   window.location.origin.includes('127.0.0.1') || 
+                   window.location.origin === 'http://localhost' || 
+                   window.location.origin === 'https://localhost' || 
                    window.location.origin === 'capacitor://localhost';
 const API_BASE_URL = isCapacitor ? 'https://profile-ui-ghfjj7iuaa-uc.a.run.app' : '';
+
 
 const API_URL = `${API_BASE_URL}/api/profiles`;
 
@@ -1625,15 +1626,20 @@ function updateUIForRole(switchView = true) {
         if (notificationBellWrap) notificationBellWrap.style.display = 'block';
         mainNavTabs.style.display = 'flex';
 
-        // Update Header Avatar
-        if (userAvatar) {
+        // Update Nav Avatars (Moved from top-right header to professional nav tabs)
+        const navAvatarDiv = document.getElementById('navProfileAvatar');
+        const bottomNavAvatarDiv = document.getElementById('bottomProfileAvatar');
+        if (navAvatarDiv || bottomNavAvatarDiv) {
             const user = currentUser.user;
             const initials = getInitials(user.name);
-            userAvatar.innerHTML = user.imageUrl
+            const avatarContent = user.imageUrl
                 ? `<img src="${getImageUrl(user.imageUrl)}" alt="${escapeHtml(user.name)}">`
-                : initials;
-            userAvatar.style.display = 'flex';
+                : `<span class="initials">${initials}</span>`;
+            
+            if (navAvatarDiv) navAvatarDiv.innerHTML = avatarContent;
+            if (bottomNavAvatarDiv) bottomNavAvatarDiv.innerHTML = avatarContent;
         }
+
 
         // Start notification polling
         if (!notifPollingInterval) {
@@ -1692,10 +1698,11 @@ function updateUIForRole(switchView = true) {
 
     }
 
-    // Bottom Nav visibility for mobile
-    const isMobileView = window.innerWidth <= 768 || isCapacitor;
-    if (isMobileView && mobileBottomNav) {
+    // Bottom Nav visibility for mobile (native app or small screen browser)
+    const isMobileLayout = window.innerWidth <= 768 || isCapacitor;
+    if (isMobileLayout && mobileBottomNav) {
         mobileBottomNav.style.display = 'flex';
+
         
         // Hide specific buttons if not logged in
         const bottomNewPostBtn = document.getElementById('bottomNewPostBtn');
@@ -1839,14 +1846,19 @@ async function handleForgotPassword(e) {
         const data = await response.json();
 
         if (data.success) {
-            showToast('Reset code generated (simulated)! Check your console/response.', 'info');
-            // In a real app, the user would check email. 
-            // Here, we'll help them by showing the form and they can "guess" the code or we show it.
-            console.log('RESET CODE:', data.token); // Helpful for the user in this demo
+            showToast('Reset code generated! Check your email.', 'success');
+            console.log('DEBUG RESET CODE:', data.token);
             showResetForm(email);
         } else {
-            errorEl.textContent = data.error || 'Failed to process request';
-            errorEl.style.display = 'block';
+            // If the server returned a token even with an error, it means email failed but token is valid
+            if (data.token) {
+                console.log('DEBUG RESET CODE:', data.token);
+                showToast('Email failed (maybe due to Resend tier limits), but a reset code was generated for you.', 'warning');
+                showResetForm(email);
+            } else {
+                errorEl.textContent = data.error || 'Failed to process request';
+                errorEl.style.display = 'block';
+            }
         }
     } catch (error) {
         console.error('Forgot password error:', error);
@@ -2563,9 +2575,10 @@ function renderNetwork(data) {
                         <h4>${escapeHtml(prof.name)}</h4>
                         <p>${escapeHtml(prof.role || 'Professional')}</p>
                     </div>
-                    <button class="btn btn-primary btn-sm follow-btn" data-id="${prof._id}" style="width: 100%; margin-top: auto;">
+                    <button id="follow-btn-${prof._id}" class="btn btn-primary btn-sm follow-btn" data-id="${prof._id}" style="width: 100%; margin-top: auto;">
                         Follow
                     </button>
+
                 </div>
             `).join('');
 
@@ -2574,16 +2587,11 @@ function renderNetwork(data) {
                 btn.addEventListener('click', async (e) => {
                     const targetBtn = e.target.closest('.follow-btn');
                     const targetId = targetBtn.dataset.id;
-                    targetBtn.classList.add('loading');
-                    const success = await handleFollowToggle(targetId);
-                    if (success) {
-                        showToast('Following updated', 'success');
-                        loadNetwork(); // Refresh network
-                    } else {
-                        targetBtn.classList.remove('loading');
-                    }
+                    await toggleFollow(targetId, targetBtn);
+                    loadNetwork(); // Refresh network to update counts
                 });
             });
+
         }
     }
 
@@ -2592,22 +2600,47 @@ function renderNetwork(data) {
         if (!data.catchUp || data.catchUp.length === 0) {
             catchUpFeed.innerHTML = '<p class="empty-notif" style="text-align: center; color: var(--color-text-muted); padding: 2.5rem; border: 1px dashed var(--color-border); border-radius: var(--radius-md);">No recent activity from your network yet.<br><small>Follow more technical bloggers to see their latest insights here.</small></p>';
         } else {
-            catchUpFeed.innerHTML = data.catchUp.map(blog => `
-                <div class="catch-up-item">
-                    <div class="catch-up-avatar">
-                         ${blog.author?.imageUrl ? `<img src="${getImageUrl(blog.author.imageUrl)}" alt="${blog.author.name}">` : getInitials(blog.author?.name || 'U')}
-                    </div>
-                    <div class="catch-up-content">
-                        <p class="catch-up-text"><strong>${escapeHtml(blog.author?.name || 'Someone')}</strong> published a new blog:</p>
-                        <p class="catch-up-text" style="color: var(--color-accent-primary); font-weight: 500;">"${escapeHtml(blog.title)}"</p>
-                        <p class="catch-up-time">${timeAgo(blog.createdAt)}</p>
-                    </div>
-                    <div class="catch-up-action">
-                        <button class="btn btn-secondary btn-sm" onclick="window.location.hash = '#blog-${blog._id}'">Read Post</button>
-                    </div>
-                </div>
-            `).join('');
+            catchUpFeed.innerHTML = data.catchUp.map(item => {
+                if (item.type === 'blog') {
+                    return `
+                    <div class="catch-up-item">
+                        <div class="catch-up-avatar">
+                             ${item.author?.imageUrl ? `<img src="${getImageUrl(item.author.imageUrl)}" alt="${item.author.name}">` : getInitials(item.author?.name || 'U')}
+                        </div>
+                        <div class="catch-up-content">
+                            <p class="catch-up-text"><strong>${escapeHtml(item.author?.name || 'Someone')}</strong> published a new blog:</p>
+                            <p class="catch-up-text" style="color: var(--color-accent-primary); font-weight: 500;">"${escapeHtml(item.title)}"</p>
+                            <p class="catch-up-time">${timeAgo(item.createdAt)}</p>
+                        </div>
+                        <div class="catch-up-action">
+                            <button class="btn btn-secondary btn-sm" onclick="window.location.hash = '#blog-${item.id}'">Read Post</button>
+                        </div>
+                    </div>`;
+                } else {
+                    // Notification types (follow, comment, like)
+                    let icon = '🔔';
+                    if (item.type === 'follow') icon = '👤';
+                    if (item.type === 'comment') icon = '💬';
+                    if (item.type === 'like') icon = '❤️';
+
+                    return `
+                    <div class="catch-up-item activity-notif" style="background: rgba(var(--color-accent-primary-rgb), 0.03);">
+                        <div class="catch-up-avatar" style="background: var(--color-bg-tertiary); color: var(--color-accent-primary);">
+                             ${icon}
+                        </div>
+                        <div class="catch-up-content">
+                            <p class="catch-up-text"><strong>${escapeHtml(item.title)}</strong></p>
+                            <p class="catch-up-text" style="font-size: 0.8125rem;">${escapeHtml(item.body)}</p>
+                            <p class="catch-up-time">${timeAgo(item.createdAt)}</p>
+                        </div>
+                        <div class="catch-up-action">
+                            <button class="btn btn-secondary btn-sm" onclick="window.location.hash = '${item.url || '#'}'">View</button>
+                        </div>
+                    </div>`;
+                }
+            }).join('');
         }
+
     }
 }
 

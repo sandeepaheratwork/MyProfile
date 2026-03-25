@@ -1148,24 +1148,50 @@ app.get('/api/users/:id/network', async (req, res) => {
             _id: { $nin: [...followingIds, new ObjectId(currentUserId)] }
         }, { projection: { password: 0 } }).limit(8).toArray();
 
-        // 4. Catch up — Recent blogs from network (last 30 days)
-        const catchUpBlogs = await blogsCol.find({
-            'author.id': { $in: (user.following || []).map(id => id.toString()) },
-            createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        }).sort({ createdAt: -1 }).limit(10).toArray();
+        // 4. Catch up — Aggregated activity (Blogs from following + Notifications for user)
+        const [catchUpBlogs, recentNotifs] = await Promise.all([
+            blogsCol.find({
+                'author.id': { $in: (user.following || []).map(idx => idx.toString()) },
+                createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+            }).sort({ createdAt: -1 }).limit(10).toArray(),
+            
+            (await getNotificationsCollection()).find({
+                recipientId: id.toString(),
+                createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+            }).sort({ createdAt: -1 }).limit(10).toArray()
+        ]);
+
+        // Transform into a unified activity feed
+        const activity = [
+            ...catchUpBlogs.map(b => ({
+                id: b._id,
+                type: 'blog',
+                title: b.title,
+                author: b.author,
+                createdAt: b.createdAt
+            })),
+            ...recentNotifs.map(n => ({
+                id: n._id,
+                type: n.type,
+                title: n.title,
+                body: n.body,
+                url: n.url,
+                createdAt: n.createdAt
+            }))
+        ].sort((a, b) => b.createdAt - a.createdAt).slice(0, 15);
 
         res.json({
             success: true,
             manage: {
-
                 followingCount: following.length,
                 followersCount: followers.length,
-                followingDetail: following.slice(0, 5), // Return teaser list for dashboard
+                followingDetail: following.slice(0, 5),
                 followersDetail: followers.slice(0, 5)
             },
             suggestions,
-            catchUp: catchUpBlogs
+            catchUp: activity
         });
+
     } catch (error) {
         console.error('Network fetch error:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -1762,9 +1788,11 @@ app.post('/api/forgot-password', async (req, res) => {
         );
 
         // In a real app, send email here.
+        let emailError = null;
         if (resendClient) {
             try {
-                await resendClient.emails.send({
+                console.log(`Attempting to send reset email to: ${email}`);
+                const { data, error } = await resendClient.emails.send({
                     from: 'TechForge Support <onboarding@resend.dev>',
                     to: email,
                     subject: 'Reset your password',
@@ -1779,10 +1807,25 @@ app.post('/api/forgot-password', async (req, res) => {
                         </div>
                     `
                 });
+                
+                if (error) {
+                    console.error('Resend Error:', error);
+                    emailError = error.message;
+                } else {
+                    console.log('Reset email sent successfully:', data.id);
+                }
             } catch (e) {
                 console.error('Failed to send reset email:', e.message);
-                // We still return the token in the response for demo purposes if email fails
+                emailError = e.message;
             }
+        }
+
+        if (emailError) {
+            return res.status(500).json({ 
+                success: false, 
+                error: `Failed to send email: ${emailError}`,
+                token // Still return token so user can manually reset if needed for demo
+            });
         }
 
         res.json({ success: true, message: 'Reset code generated and sent to your email', token });
