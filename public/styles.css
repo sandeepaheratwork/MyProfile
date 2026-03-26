@@ -126,6 +126,25 @@ body::before {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--spacing-md);
+}
+
+.language-switcher {
+    margin-right: 0.5rem;
+}
+
+.language-switcher select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 6px 12px;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
 }
 
 .logo {
@@ -458,16 +477,38 @@ body::before {
 }
 
 /* AI Explain Button */
+.ai-explain-btn, .ai-translate-btn {
+    font-weight: 600 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    transition: all var(--transition-base) !important;
+}
+
 .ai-explain-btn {
     background: var(--color-bg-secondary) !important;
     border: 1px solid var(--color-accent-primary) !important;
     color: var(--color-accent-primary) !important;
-    font-weight: 600 !important;
+}
+
+.ai-translate-btn {
+    background: var(--color-bg-secondary) !important;
+    border: 1px solid var(--color-success) !important;
+    color: var(--color-success) !important;
 }
 
 .ai-explain-btn:hover {
     background: var(--color-accent-primary) !important;
     color: white !important;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.ai-translate-btn:hover {
+    background: var(--color-success) !important;
+    color: white !important;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
 }
 
 @media (max-width: 768px) {

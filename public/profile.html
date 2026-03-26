@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script src="translations.js"></script>
     <style>
         .portfolio-header {
             background: var(--color-bg-secondary);
@@ -232,7 +233,14 @@
                     <img src="assets/owner-profile.jpg" alt="Profile"
                         style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">
                 </div>
-                <h1>TechForge</h1>
+                <h1 data-i18n="app_title">TechForge</h1>
+            </div>
+            <div class="language-switcher">
+                <select id="languageSelect" class="btn btn-secondary btn-sm">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="hi">हिन्दी</option>
+                </select>
             </div>
         </div>
     </header>
@@ -240,13 +248,13 @@
     <main class="main-content">
         <div id="loadingState" class="loading-state active">
             <div class="spinner"></div>
-            <p>Loading profile details...</p>
+            <p data-i18n="loading_profile_details">Loading profile details...</p>
         </div>
 
         <div id="errorState" class="error-state">
-            <h3>Something went wrong</h3>
+            <h3 data-i18n="something_wrong">Something went wrong</h3>
             <p></p>
-            <a href="/" class="btn btn-primary" style="margin-top: 1rem;">Back to Dashboard</a>
+            <a href="/" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="back_to_dashboard">Back to Dashboard</a>
         </div>
 
         <div id="profileContent">

@@ -24,6 +24,40 @@ function getImageUrl(url) {
 const profileContent = document.getElementById('profileContent');
 const loadingState = document.getElementById('loadingState');
 const errorState = document.getElementById('errorState');
+let currentLanguage = localStorage.getItem('appLanguage') || 'en';
+
+// Translation Logic
+function updateTranslations() {
+    const lang = currentLanguage;
+    const tDict = translations[lang] || translations['en'];
+
+    // Update text content for elements with data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tDict[key]) {
+            el.textContent = tDict[key];
+        }
+    });
+
+    // Set the language selector value
+    const langSelect = document.getElementById('languageSelect');
+    if (langSelect) {
+        langSelect.value = lang;
+    }
+}
+
+function setLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('appLanguage', lang);
+    updateTranslations();
+    
+    // Re-render profile if already loaded to apply new translations
+    const urlParams = new URLSearchParams(window.location.search);
+    const profileId = urlParams.get('id');
+    if (profileId) {
+        loadProfile(profileId);
+    }
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -49,6 +83,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadProfile(profileId);
     } else {
         showError('No profile ID specified');
+    }
+
+    // Initialize Translations
+    updateTranslations();
+
+    // Language switcher listener
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+        languageSelect.addEventListener('change', (e) => {
+            setLanguage(e.target.value);
+        });
     }
 
     // Initialize native-feel Pull To Refresh on Mobile
@@ -112,20 +157,20 @@ function renderProfile(profile) {
                 </div>
             </div>
             <div class="portfolio-actions">
-                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="/" class="btn btn-secondary" data-i18n="back_to_dashboard">${t('back_to_dashboard')}</a>
             </div>
         </div>
 
         <div class="portfolio-content">
             <section class="content-section">
-                <h2>About</h2>
+                <h2 data-i18n="about">${t('about')}</h2>
                 <div class="bio-text">
-                    ${profile.bio ? escapeHtml(profile.bio).replace(/\n/g, '<br>') : '<em>No bio available</em>'}
+                    ${profile.bio ? escapeHtml(profile.bio).replace(/\n/g, '<br>') : `<em data-i18n="no_bio">${t('no_bio')}</em>`}
                 </div>
             </section>
 
             <section class="content-section">
-                <h2>Portfolio Details</h2>
+                <h2 data-i18n="portfolio_details">${t('portfolio_details')}</h2>
                 <div class="portfolio-grid">
                     <!-- Placeholder portfolio items -->
                     <div class="portfolio-item">
@@ -138,8 +183,8 @@ function renderProfile(profile) {
                                 <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
                         </div>
-                        <h3>Recent Projects</h3>
-                        <p>View a collection of recent work and contributions.</p>
+                        <h3 data-i18n="recent_projects">${t('recent_projects')}</h3>
+                        <p data-i18n="recent_projects_desc">${t('recent_projects_desc')}</p>
                     </div>
                     
                     <div class="portfolio-item">
@@ -148,8 +193,8 @@ function renderProfile(profile) {
                                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                             </svg>
                         </div>
-                        <h3>Activity</h3>
-                        <p>Track recent activity and updates.</p>
+                        <h3 data-i18n="activity">${t('activity')}</h3>
+                        <p data-i18n="activity_desc">${t('activity_desc')}</p>
                     </div>
 
                      <div class="portfolio-item">
@@ -160,8 +205,8 @@ function renderProfile(profile) {
                                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                             </svg>
                         </div>
-                        <h3>Connections</h3>
-                        <p>Network and professional connections.</p>
+                        <h3 data-i18n="connections">${t('connections')}</h3>
+                        <p data-i18n="connections_desc">${t('connections_desc')}</p>
                     </div>
                 </div>
             </section>

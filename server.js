@@ -3,6 +3,11 @@ const cors = require('cors');
 const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } = require('@langchain/google-genai');
+const { ChatOllama } = require('@langchain/ollama');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
+const { SystemMessage, HumanMessage } = require('@langchain/core/messages');
+const { ChatPromptTemplate } = require('@langchain/core/prompts');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
@@ -98,14 +103,130 @@ const COLLECTION_NAME = 'profiles';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 let genAI = null;
 let model = null;
+let embeddingModel = null;
 
 if (GEMINI_API_KEY) {
     genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    console.log('Gemini AI initialized');
+    embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    console.log('Gemini AI and Embedding Model initialized');
 } else {
-    console.warn('Warning: GEMINI_API_KEY not set. Chat functionality will be limited.');
+    console.warn('Warning: GEMINI_API_KEY not set. Chat and RAG functionality will be limited.');
 }
+
+// ----------------------------------------
+// Embedding Setup (LangChain)
+// ----------------------------------------
+let lcEmbeddings = null;
+if (process.env.GEMINI_API_KEY) {
+    lcEmbeddings = new GoogleGenerativeAIEmbeddings({
+        apiKey: process.env.GEMINI_API_KEY,
+        modelName: "embedding-001", // LangChain expects the model without 'models/'
+    });
+    console.log('LangChain Embeddings initialized');
+}
+
+// Generate embedding helper for RAG (LangChain)
+async function generateEmbedding(text) {
+    if (!lcEmbeddings) return null;
+    try {
+        const safeText = text.substring(0, 10000);
+        return await lcEmbeddings.embedQuery(safeText);
+    } catch (e) {
+        console.error('LangChain Embedding error:', e.message);
+        return null;
+    }
+}
+
+// ----------------------------------------
+// LangChain AI Setup (Hybrid Engine)
+// ----------------------------------------
+let lcGemini = null;
+let lcOllama = null;
+let hybridChain = null;
+
+if (process.env.GEMINI_API_KEY) {
+    try {
+        lcGemini = new ChatGoogleGenerativeAI({
+            apiKey: process.env.GEMINI_API_KEY,
+            model: "gemini-1.5-flash", 
+        });
+        console.log('LangChain Gemini initialized');
+    } catch (e) {
+        console.warn('LangChain Gemini failed to init:', e.message);
+    }
+}
+
+// Initialize Ollama ONLY when running locally (not on Google Cloud Run)
+if (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production') {
+    try {
+        lcOllama = new ChatOllama({
+            baseUrl: "http://localhost:11434",
+            model: "llama3.2",
+        });
+        console.log('✅ LangChain Ollama initialized (Local environment)');
+    } catch (e) {
+        console.warn('⚠️ LangChain Ollama failed to init:', e.message);
+    }
+} else {
+    console.log('ℹ️ Ollama initialization skipped (Production/Cloud Run detected)');
+}
+
+// Create the Fallback Chain (Gemini -> Ollama)
+if (lcGemini && lcOllama) {
+    hybridChain = lcGemini.withFallbacks({
+        fallbacks: [lcOllama],
+    }).pipe(new StringOutputParser());
+} else if (lcOllama) {
+    hybridChain = lcOllama.pipe(new StringOutputParser());
+} else if (lcGemini) {
+    hybridChain = lcGemini.pipe(new StringOutputParser());
+}
+
+// Unified Hybrid AI Helper (LangChain version)
+async function getAIResponse(prompt, systemPrompt = '') {
+    if (!hybridChain) {
+        console.error('[AI] No AI chain configured!');
+        return { text: "AI services are not configured.", provider: "error" };
+    }
+    
+    try {
+        const messages = [
+            new SystemMessage(systemPrompt || "You are a helpful technical assistant for TechForge."),
+            new HumanMessage(prompt)
+        ];
+
+        // We attempt Gemini first explicitly to log its status
+        if (lcGemini) {
+            try {
+                const response = await lcGemini.invoke(messages);
+                console.log('✅ [AI] Response received from: Gemini');
+                return {
+                    text: typeof response === 'string' ? response : response.content,
+                    provider: "gemini"
+                };
+            } catch (geminiError) {
+                console.warn('⚠️ [AI] Gemini failed, falling back to Ollama:', geminiError.message);
+            }
+        }
+
+        // Fallback to Ollama
+        if (lcOllama) {
+            const response = await lcOllama.invoke(messages);
+            console.log('✅ [AI] Response received from: Ollama (Local)');
+            return {
+                text: typeof response === 'string' ? response : response.content,
+                provider: "ollama"
+            };
+        }
+
+        return { text: "No AI provider available or all failed.", provider: "error" };
+    } catch (err) {
+        console.error('[AI] Fatal Error:', err.message);
+        return { text: "Error processing AI request.", provider: "error" };
+    }
+}
+
 
 // Middleware
 const allowedOrigins = [
@@ -382,11 +503,14 @@ function createMcpServer() {
         async ({ title, content, tags }) => {
             try {
                 const collection = await getBlogsCollection();
+                const blogEmbedding = await generateEmbedding(`${title}\n\n${content}`);
+                
                 const blog = {
                     title,
                     content,
                     tags: tags || [],
                     author: { name: 'Admin (MCP)' },
+                    contentVector: blogEmbedding, // Added for Vector Search
                     createdAt: new Date(),
                     updatedAt: new Date()
                 };
@@ -1359,6 +1483,34 @@ app.get('/api/blogs', async (req, res) => {
 });
 
 // Get single blog
+// Get blog posts for a specific user ID
+app.get('/api/blogs/user/:userId', async (req, res) => {
+    const { userId } = req.params;
+    console.log(`[API] Fetching posts for user: ${userId}`);
+    try {
+        const collection = await getBlogsCollection();
+        
+        const query = {
+            $or: [
+                { "author.id": userId }
+            ]
+        };
+
+        // Only try ObjectId if it's a valid 24-char hex string
+        if (userId && /^[0-9a-fA-F]{24}$/.test(userId)) {
+            query.$or.push({ "author.id": new ObjectId(userId) });
+        }
+        
+        const userPosts = await collection.find(query).sort({ createdAt: -1 }).toArray();
+        console.log(`[API] Found ${userPosts.length} posts for user ${userId}`);
+        res.json({ success: true, posts: userPosts });
+    } catch (error) {
+        console.error('Error fetching user blogs:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
 app.get('/api/blogs/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1417,12 +1569,15 @@ app.post('/api/blogs', checkAuth, async (req, res) => {
         }
 
         const collection = await getBlogsCollection();
+        const blogEmbedding = await generateEmbedding(`${title}\n\n${content}`);
+
         const blog = {
             title,
             content,
             tags: finalTags,
             mentions: mentions,
             author: { id: req.session.userId, name: authorName },
+            contentVector: blogEmbedding, // Added for Vector Search
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -1502,6 +1657,8 @@ app.put('/api/blogs/:id', checkAuth, async (req, res) => {
             }
         }
 
+        const blogEmbedding = await generateEmbedding(`${title}\n\n${content}`);
+
         await collection.updateOne(
             { _id: new ObjectId(id) },
             {
@@ -1510,6 +1667,7 @@ app.put('/api/blogs/:id', checkAuth, async (req, res) => {
                     content,
                     tags: finalTags,
                     mentions,
+                    contentVector: blogEmbedding, // Updated for Vector Search
                     updatedAt: new Date()
                 }
             }
@@ -1517,6 +1675,133 @@ app.put('/api/blogs/:id', checkAuth, async (req, res) => {
 
         res.json({ success: true, message: 'Blog updated successfully' });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// AI Translation endpoint
+app.post('/api/blogs/:id/translate', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { targetLanguage } = req.body;
+
+        if (!targetLanguage) {
+            return res.status(400).json({ success: false, error: 'Target language is required' });
+        }
+
+        const blogsCollection = await getBlogsCollection();
+        const blog = await blogsCollection.findOne({ _id: new ObjectId(id) });
+
+        if (!blog) {
+            return res.status(404).json({ success: false, error: 'Blog not found' });
+        }
+
+        const prompt = `Translate the following blog post title and content into ${targetLanguage}.
+        Return ONLY a JSON object with "title" and "content" keys. Keep the original Markdown formatting (bold, links, code blocks).
+        
+        Title: ${blog.title}
+        Content: ${blog.content}`;
+
+        const aiResult = await getAIResponse(prompt, "You are a professional technical translator. Return only JSON.");
+        const aiResponse = aiResult.text;
+
+        // Try to find JSON in the response (Ollama sometimes adds conversational filler)
+        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('Invalid AI response format');
+        
+        const translated = JSON.parse(jsonMatch[0]);
+
+        res.json({
+            success: true,
+            translatedTitle: translated.title,
+            translatedContent: translated.content,
+            provider: aiResult.provider
+        });
+
+    } catch (error) {
+        console.error('Translation error:', error);
+        res.status(500).json({ success: false, error: 'Failed to translate blog content' });
+    }
+});
+
+// Admin: Re-index all existing blogs for Vector Search
+app.post('/api/admin/reindex-blogs', checkAdminRole, async (req, res) => {
+    try {
+        const collection = await getBlogsCollection();
+        const blogs = await collection.find({ contentVector: { $exists: false } }).toArray();
+        let updatedCount = 0;
+
+        for (const blog of blogs) {
+            const embedding = await generateEmbedding(`${blog.title}\n\n${blog.content}`);
+            if (embedding) {
+                await collection.updateOne({ _id: blog._id }, { $set: { contentVector: embedding } });
+                updatedCount++;
+            }
+        }
+
+        res.json({ success: true, message: `Re-indexed ${updatedCount} blogs.` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// AI Q&A using RAG (Vector Search + LLM)
+app.post('/api/ai/qa', async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) return res.status(400).json({ error: 'Query is required' });
+
+        const queryVector = await generateEmbedding(query);
+        if (!queryVector) return res.status(500).json({ error: 'Failed to generate query vector' });
+
+        const blogsCollection = await getBlogsCollection();
+        
+        // MongoDB Atlas Vector Search Pipeline
+        const pipeline = [
+            {
+                "$vectorSearch": {
+                    "index": "vector_index", // Must match index name in Atlas
+                    "path": "contentVector",
+                    "queryVector": queryVector,
+                    "numCandidates": 10,
+                    "limit": 3
+                }
+            },
+            {
+                "$project": {
+                    "title": 1,
+                    "content": 1,
+                    "score": { "$meta": "vectorSearchScore" }
+                }
+            }
+        ];
+
+        const results = await blogsCollection.aggregate(pipeline).toArray();
+
+        // If no results found with high confidence, fallback to general knowledge
+        const context = results.length > 0 
+            ? results.map(r => `Blog Title: ${r.title}\nContent: ${r.content}`).join('\n\n')
+            : "No specific local documentation found.";
+
+        const prompt = `You are a technical expert for TechForge. Use the provided project context to answer the user's question accurately.
+        If the answer isn't in the context, you can use your general knowledge but mention you are doing so.
+        
+        CONTEXT:
+        ${context}
+        
+        USER QUESTION: ${query}`;
+
+        const aiResult = await getAIResponse(prompt);
+
+        res.json({
+            success: true,
+            answer: aiResult.text,
+            sources: results.map(r => r.title),
+            provider: aiResult.provider
+        });
+
+    } catch (error) {
+        console.error('RAG Q&A Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -2045,19 +2330,11 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
-        if (!model) {
-            return res.status(503).json({
-                success: false,
-                error: 'AI chat is not available. Please set GEMINI_API_KEY environment variable.',
-                response: 'I apologize, but AI chat is not configured. Please use the form interface to manage profiles.'
-            });
-        }
-
-        // Determine general intent category before sending to AI
+        // Determine general intent category
         const messageLower = message.toLowerCase();
         const isBlogTopic = messageLower.includes('blog') || messageLower.includes('post') || messageLower.includes('technical');
 
-        // 1. Check permissions for Profiles (Admin Only)
+        // Security Permissions Check
         if (!isBlogTopic && !isAdmin && !messageLower.includes('help') && !messageLower.includes('hello')) {
             return res.json({
                 success: true,
@@ -2066,8 +2343,6 @@ app.post('/api/chat', async (req, res) => {
                 action: { type: 'error', message: 'Admin access required for profile tools' }
             });
         }
-
-        // 2. Check permissions for Blogs (Registered Users)
         if (isBlogTopic && !isUser) {
             return res.json({
                 success: true,
@@ -2077,60 +2352,43 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
-        // Send message to Gemini
-        const result = await model.generateContent([
-            { text: SYSTEM_PROMPT },
-            { text: `User message: ${message}` }
-        ]);
+        // 1. Get Primary AI Response (Hybrid Fallback)
+        const aiResult = await getAIResponse(message, SYSTEM_PROMPT);
+        let response = aiResult.text;
 
-        const responseText = result.response.text();
+        // 2. Extract Intent & Entities (Hybrid Fallback)
+        let intent;
+        let entities;
+        let extractionPrompt;
 
-        // Parse the JSON response
-        let parsed;
+        if (isBlogTopic) {
+            extractionPrompt = `Analyze this blog-related message: "${message}".
+            Intents: "create_blog", "list_blogs", "search_blogs", "delete_blog".
+            Return JSON only: { "intent": "string", "entities": { "blogTitle": "string", "blogContent": "string", "tags": "array", "searchQuery": "string" } }`;
+        } else {
+            extractionPrompt = `Analyze this profile-related message: "${message}".
+            Intents: "create", "search", "update", "list", "delete", "help".
+            Return JSON only: { "intent": "string", "entities": { "name": "string", "email": "string", "role": "string", "bio": "string", "searchQuery": "string" } }`;
+        }
+
+        const extractResult = await getAIResponse(extractionPrompt, "You are an entity extractor. Return ONLY JSON.");
+        const cleanedExtract = extractResult.text.replace(/```json|```/g, '').trim();
+        const jsonMatch = cleanedExtract.match(/\{[\s\S]*\}/);
+        
         try {
-            // Clean up the response - remove markdown code blocks if present
-            let cleanedResponse = responseText.trim();
-            if (cleanedResponse.startsWith('```json')) {
-                cleanedResponse = cleanedResponse.slice(7);
-            } else if (cleanedResponse.startsWith('```')) {
-                cleanedResponse = cleanedResponse.slice(3);
-            }
-            if (cleanedResponse.endsWith('```')) {
-                cleanedResponse = cleanedResponse.slice(0, -3);
-            }
-            let intent;
-            let entities;
-            let response = "I'm not sure how to respond to that."; // Default response
+            const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { intent: 'help', entities: {} };
+            intent = parsed.intent;
+            entities = parsed.entities || {};
+        } catch (e) {
+            intent = 'help';
+            entities = {};
+        }
 
-            if (message.toLowerCase().includes('blog') || message.toLowerCase().includes('post') || message.toLowerCase().includes('technical')) {
-                const prompt = `
-                The user wants to interact with blogs.
-                Message: "${message}"
-                Extract: blogTitle, blogContent, tags (as array), searchQuery.
-                And determine intent: "create_blog", "list_blogs", "search_blogs", or "delete_blog".
-                Return JSON only: { "intent": "string", "entities": { "blogTitle": "string or null", "blogContent": "string or null", "tags": "array or null", "searchQuery": "string or null" } }
-            `;
-                const result = await model.generateContent(prompt);
-                const aiResponse = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
-                intent = aiResponse.intent;
-                entities = aiResponse.entities || {};
-            } else {
-                const prompt = `
-                Extract profile management intent from this message: "${message}"
-                Possible intents: "create", "search", "update", "list", "delete", "help".
-                Return JSON only: { "intent": "string", "entities": { "name": "string or null", "email": "string or null", "role": "string or null", "bio": "string or null", "searchQuery": "string or null" } }
-            `;
-                const result = await model.generateContent(prompt);
-                const aiResponse = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
-                intent = aiResponse.intent;
-                entities = aiResponse.entities || {};
-            }
+        let actionResult = null;
+        let profiles = [];
+        const collection = await getProfilesCollection();
 
-            let actionResult = null;
-            let profiles = [];
-
-            const collection = await getProfilesCollection();
-
+        try {
             // Execute the appropriate action based on intent
             switch (intent) {
                 case 'create':
@@ -2288,14 +2546,37 @@ app.post('/api/chat', async (req, res) => {
                 case 'search_blogs':
                     if (entities.searchQuery) {
                         const blogsCol = await getBlogsCollection();
-                        const blogRegex = new RegExp(entities.searchQuery, 'i');
-                        const matchingBlogs = await blogsCol.find({
-                            $or: [
-                                { title: { $regex: blogRegex } },
-                                { content: { $regex: blogRegex } },
-                                { tags: { $in: [blogRegex] } }
-                            ]
-                        }).limit(5).toArray();
+                        
+                        // Try Vector Search first for semantic matching
+                        const queryVector = await generateEmbedding(entities.searchQuery);
+                        let matchingBlogs = [];
+                        
+                        if (queryVector) {
+                            try {
+                                const vectorResults = await blogsCol.aggregate([
+                                    {
+                                        "$vectorSearch": {
+                                            "index": "vector_index",
+                                            "path": "contentVector",
+                                            "queryVector": queryVector,
+                                            "numCandidates": 50,
+                                            "limit": 5
+                                        }
+                                    }
+                                ]).toArray();
+                                matchingBlogs = vectorResults;
+                            } catch (ve) {
+                                console.warn('Vector search failed, falling back to regex:', ve.message);
+                                const blogRegex = new RegExp(entities.searchQuery, 'i');
+                                matchingBlogs = await blogsCol.find({
+                                    $or: [
+                                        { title: { $regex: blogRegex } },
+                                        { content: { $regex: blogRegex } },
+                                        { tags: { $in: [blogRegex] } }
+                                    ]
+                                }).limit(5).toArray();
+                            }
+                        }
 
                         actionResult = {
                             type: 'blog_list',
@@ -2303,8 +2584,8 @@ app.post('/api/chat', async (req, res) => {
                             blogs: matchingBlogs
                         };
                         response = matchingBlogs.length > 0
-                            ? `I found ${matchingBlogs.length} blog posts matching "${entities.searchQuery}".`
-                            : `I couldn't find any blog posts matching "${entities.searchQuery}".`;
+                            ? `I found ${matchingBlogs.length} blog posts using semantic vector search for "${entities.searchQuery}".`
+                            : `I couldn't find any blogs matching "${entities.searchQuery}".`;
                     } else {
                         response = "I'd be happy to search our technical blogs! What keywords are you looking for?";
                         actionResult = { type: 'error', message: 'Missing search query' };
@@ -2355,7 +2636,7 @@ app.post('/api/chat', async (req, res) => {
         let isRateLimited = false;
 
         if (error.message.includes('429') || error.message.includes('Quota exceeded')) {
-            errorMessage = 'I am currently receiving too many requests. This is a provider limit (Gemini 2.0 Flash Free Tier). Please wait about 60 seconds and try again.';
+            errorMessage = 'The AI service is currently receiving too many requests. Please wait a moment and try again.';
             isRateLimited = true;
         } else if (error.message.includes('503')) {
             errorMessage = 'The AI service is temporarily unavailable. Please try again later.';

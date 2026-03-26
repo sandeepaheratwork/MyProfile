@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <script src="translations.js"></script>
 </head>
 
 <body>
@@ -30,19 +31,26 @@
             <div class="header-actions">
                 <!-- Login Button -->
 
+                <div class="language-switcher">
+                    <select id="languageSelect" class="btn btn-secondary btn-sm">
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="hi">हिन्दी</option>
+                    </select>
+                </div>
                 <button class="btn btn-secondary" id="loginBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
                         <polyline points="10 17 15 12 10 7" />
                         <line x1="15" y1="12" x2="3" y2="12" />
                     </svg>
-                    <span>Login</span>
+                    <span data-i18n="login">Login</span>
                 </button>
                 <div id="adminBadge" class="admin-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
-                    <span>Admin</span>
+                    <span data-i18n="admin">Admin</span>
                 </div>
                 <!-- Notification Bell -->
                 <div id="notificationBellWrap" style="display:none; position:relative;">
@@ -61,8 +69,8 @@
                     <!-- Notification Dropdown Panel -->
                     <div id="notificationPanel" class="notification-panel" style="display:none;">
                         <div class="notif-panel-header">
-                            <span>Notifications</span>
-                            <button class="notif-mark-all" onclick="markAllNotificationsRead()">Mark all read</button>
+                            <span data-i18n="notifications">Notifications</span>
+                            <button class="notif-mark-all" onclick="markAllNotificationsRead()" data-i18n="mark_all_read">Mark all read</button>
                         </div>
                         <div id="notifList" class="notif-list">
                             <div class="notif-empty">No notifications yet</div>
@@ -95,7 +103,7 @@
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
-                Technical Blogs
+                <span data-i18n="tab_blogs">Technical Blogs</span>
             </button>
             <button class="nav-tab" data-tab="network" id="networkTab" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -104,7 +112,7 @@
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
-                My Network
+                <span data-i18n="tab_network">My Network</span>
             </button>
             <button class="nav-tab" data-tab="my-profile" id="userProfileTab" style="display: none;">
                 <div class="nav-avatar" id="navProfileAvatar">
@@ -113,15 +121,15 @@
                         <circle cx="12" cy="7" r="4" />
                     </svg>
                 </div>
-                My Profile
+                <span data-i18n="tab_profile">My Profile</span>
             </button>
 
         </div>
 
         <!-- Sticky Secondary Header for Blogs Section -->
         <div class="section-header" id="blogStickyHeader" style="display: none; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding: var(--spacing-md) var(--spacing-xl); background: inherit; border-top: 1px solid var(--color-border); margin: 0; max-width: 1400px; margin: 0 auto; box-sizing: border-box; width: 100%;">
-            <h2 style="margin: 0; font-size: 1.25rem;">Recent Technical Insights</h2>
-            <button class="btn btn-primary btn-sm" id="newBlogBtn" style="white-space: nowrap;">
+            <h2 style="margin: 0; font-size: 1.25rem;" data-i18n="recent_insights">Recent Technical Insights</h2>
+            <button class="btn btn-primary btn-sm" id="newBlogBtn" style="white-space: nowrap;" data-i18n="new_post">
                 New Post
             </button>
         </div>
@@ -140,13 +148,13 @@
                     </svg>
                 </div>
                 <input type="text" id="searchInput" class="search-input"
-                    placeholder="Search profiles by name, email, or role...">
+                    data-i18n-placeholder="search_placeholder" placeholder="Search profiles by name, email, or role...">
                 <div class="search-shortcut">
                     <kbd>⌘</kbd><kbd>K</kbd>
                 </div>
             </div>
             <div class="search-stats" id="searchStats">
-                <span class="stats-count" id="profileCount">0</span> profiles found
+                <span class="stats-count" id="profileCount">0</span> <span data-i18n="profiles_found">profiles found</span>
             </div>
         </section>
 
@@ -157,23 +165,23 @@
             </div>
             <div id="blogLoadingState" class="loading-state">
                 <div class="spinner"></div>
-                <p>Loading blogs...</p>
+                <p data-i18n="loading_blogs">Loading blogs...</p>
             </div>
             <div id="blogEmptyState" class="empty-state" style="display: none;">
-                <p>No technical blogs yet. Stay tuned!</p>
+                <p data-i18n="no_blogs">No technical blogs yet. Stay tuned!</p>
             </div>
         </section>
 
         <!-- My Profile Section -->
         <section class="my-profile-section" id="myProfileSection" style="display: none;">
             <div class="section-header" style="margin-bottom: 2rem;">
-                <h2>My Professional Profile</h2>
+                <h2 data-i18n="pro_profile">My Professional Profile</h2>
             </div>
             <div id="myProfileContent" class="profile-detail-card">
                 <!-- User's own profile will be rendered here -->
                 <div class="loading-state">
                     <div class="spinner"></div>
-                    <p>Loading your profile...</p>
+                    <p data-i18n="loading_profile">Loading your profile...</p>
                 </div>
             </div>
         </section>
@@ -181,14 +189,14 @@
         <!-- Network Section -->
         <section class="network-section" id="networkSection" style="display: none;">
             <div class="section-header" style="margin-bottom: 1.5rem;">
-                <h2>My Network</h2>
+                <h2 data-i18n="tab_network">My Network</h2>
             </div>
             <div class="network-layout">
                 <!-- Sidebar -->
                 <aside class="network-sidebar">
                     <div class="network-card">
                         <div class="card-header">
-                            <h3 style="font-size: 1rem; margin: 0;">Manage my network</h3>
+                            <h3 style="font-size: 1rem; margin: 0;" data-i18n="manage_network">Manage my network</h3>
                         </div>
                         <ul class="network-nav">
                             <li>
@@ -199,7 +207,7 @@
                                             <circle cx="8.5" cy="7" r="4"></circle>
                                             <polyline points="17 11 19 13 23 9"></polyline>
                                         </svg>
-                                        <span>Following</span>
+                                        <span data-i18n="following">Following</span>
                                     </div>
                                     <span class="count" id="networkFollowingCount">0</span>
                                 </button>
@@ -213,7 +221,7 @@
                                             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                                             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                                         </svg>
-                                        <span>Followers</span>
+                                        <span data-i18n="followers">Followers</span>
                                     </div>
                                     <span class="count" id="networkFollowersCount">0</span>
                                 </button>
@@ -226,21 +234,29 @@
                 <div class="network-main">
                     <!-- Catch Up Section -->
                     <div class="network-card catch-up-section" style="margin-bottom: 1.5rem;">
-                        <div class="card-header">
-                            <h3 style="font-size: 1.125rem; margin: 0;">Catch up</h3>
-                            <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;">Recent updates from people you follow</p>
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer;" onclick="toggleCatchUpCollapse()">
+                            <div>
+                                <h3 style="font-size: 1.125rem; margin: 0;" data-i18n="catch_up">Catch up</h3>
+                                <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;" data-i18n="catch_up_subtitle">Recent updates from people you follow</p>
+                            </div>
+                            <button class="btn-icon-sm collapse-toggle" id="catchUpToggle" style="background: none; border: none; cursor: pointer; color: var(--color-text-muted); padding: 4px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px; transition: transform 0.3s ease;">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
                         </div>
-                        <div id="catchUpFeed" class="catch-up-feed">
-
-                            <div class="loading-state active"><div class="spinner"></div></div>
+                        <div id="catchUpCollapsible" style="transition: all 0.3s ease; max-height: 1000px; overflow: hidden;">
+                            <div id="catchUpFeed" class="catch-up-feed">
+                                <div class="loading-state active"><div class="spinner"></div></div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Grow Section -->
                     <div class="network-card grow-section">
                         <div class="card-header">
-                            <h3 style="font-size: 1.125rem; margin: 0;">Grow your network</h3>
-                            <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;">Profiles you might find interesting</p>
+                            <h3 style="font-size: 1.125rem; margin: 0;" data-i18n="grow_network">Grow your network</h3>
+                            <p class="subtitle" style="margin: 4px 0 0 0; color: var(--color-text-muted); font-size: 0.875rem;" data-i18n="grow_network_subtitle">Profiles you might find interesting</p>
                         </div>
                         <div id="networkSuggestions" class="suggestions-grid">
                             <div class="loading-state active"><div class="spinner"></div></div>
@@ -283,7 +299,7 @@
     <div class="modal-overlay" id="loginModal">
         <div class="modal" style="max-width: 400px;">
             <div class="modal-header">
-                <h2 id="loginModalTitle">Login</h2>
+                <h2 id="loginModalTitle" data-i18n="login_title">Login</h2>
                 <button class="modal-close" id="closeLoginModal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -295,40 +311,40 @@
             <!-- Login Form -->
             <form id="loginForm" class="modal-form">
                 <div class="form-group">
-                    <label for="loginEmail">Email Address</label>
+                    <label for="loginEmail" data-i18n="email_address">Email Address</label>
                     <input type="email" id="loginEmail" class="form-input" placeholder="email@example.com" required>
                 </div>
                 <div class="form-group">
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <label for="loginPassword" style="margin-bottom: 0;">Password</label>
+                        <label for="loginPassword" style="margin-bottom: 0;" data-i18n="enter_password">Password</label>
                         <a href="#" id="forgotPasswordLink"
-                            style="font-size: 0.75rem; color: var(--color-accent-primary);">Forgot Password?</a>
+                            style="font-size: 0.75rem; color: var(--color-accent-primary);" data-i18n="forgot_password">Forgot Password?</a>
                     </div>
-                    <input type="password" id="loginPassword" class="form-input" placeholder="Enter password" required>
+                    <input type="password" id="loginPassword" class="form-input" data-i18n-placeholder="enter_password" placeholder="Enter password" required>
                 </div>
                 <div id="loginError"
                     style="color: var(--color-danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
                 <div class="modal-actions">
                     <button type="submit" class="btn btn-primary" id="submitLoginBtn" style="width: 100%;">
-                        <span class="btn-text">Login</span>
+                        <span class="btn-text" data-i18n="login">Login</span>
                         <div class="btn-spinner"></div>
                     </button>
                 </div>
                 <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--color-text-muted);">
-                    Don't have an account? <a href="#" id="showRegisterLink"
-                        style="color: var(--color-accent-primary); font-weight: 500;">Register here</a>
+                    <span data-i18n="no_account">Don't have an account?</span> <a href="#" id="showRegisterLink"
+                        style="color: var(--color-accent-primary); font-weight: 500;" data-i18n="register_here">Register here</a>
                 </p>
             </form>
 
             <!-- Register Form (Initially Hidden) -->
             <form id="registerForm" class="modal-form" style="display: none;">
                 <div class="form-group">
-                    <label for="regName">Full Name</label>
-                    <input type="text" id="regName" class="form-input" placeholder="Enter your name" required>
+                    <label for="regName" data-i18n="full_name">Full Name</label>
+                    <input type="text" id="regName" class="form-input" data-i18n-placeholder="full_name" placeholder="Enter your name" required>
                 </div>
                 <div class="form-group">
-                    <label for="regEmail">Email Address</label>
+                    <label for="regEmail" data-i18n="email_address">Email Address</label>
                     <input type="email" id="regEmail" class="form-input" placeholder="email@example.com" required>
                 </div>
                 <div class="form-group">
@@ -347,8 +363,8 @@
                     </button>
                 </div>
                 <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--color-text-muted);">
-                    Already have an account? <a href="#" id="showLoginLink"
-                        style="color: var(--color-accent-primary); font-weight: 500;">Login here</a>
+                    <span data-i18n="already_account">Already have an account?</span> <a href="#" id="showLoginLink"
+                        style="color: var(--color-accent-primary); font-weight: 500;" data-i18n="login_here">Login here</a>
                 </p>
             </form>
 
@@ -413,7 +429,7 @@
     <div class="modal-overlay" id="changePasswordModal">
         <div class="modal" style="max-width: 400px;">
             <div class="modal-header">
-                <h2>Change Password</h2>
+                <h2 data-i18n="change_password">Change Password</h2>
                 <button class="modal-close" id="closeChangePasswordModal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -423,23 +439,23 @@
             </div>
             <form id="changePasswordForm" class="modal-form">
                 <div class="form-group">
-                    <label for="currentPassword">Current Password</label>
-                    <input type="password" id="currentPassword" class="form-input" placeholder="Enter current password"
+                    <label for="currentPassword" data-i18n="current_password">Current Password</label>
+                    <input type="password" id="currentPassword" class="form-input" data-i18n-placeholder="current_password" placeholder="Enter current password"
                         required>
                 </div>
 
                 <div class="form-group">
-                    <label for="newPassword">New Password</label>
-                    <input type="password" id="newPassword" class="form-input" placeholder="Enter new password"
+                    <label for="newPassword" data-i18n="new_password">New Password</label>
+                    <input type="password" id="newPassword" class="form-input" data-i18n-placeholder="new_password" placeholder="Enter new password"
                         required>
-                    <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;">
+                    <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;" data-i18n="password_hint">
                         Min. 8 characters with at least one uppercase letter and one number.
                     </p>
                 </div>
 
                 <div class="form-group">
-                    <label for="confirmNewPassword">Confirm New Password</label>
-                    <input type="password" id="confirmNewPassword" class="form-input" placeholder="Confirm new password"
+                    <label for="confirmNewPassword" data-i18n="confirm_password">Confirm New Password</label>
+                    <input type="password" id="confirmNewPassword" class="form-input" data-i18n-placeholder="confirm_password" placeholder="Confirm new password"
                         required>
                 </div>
 
@@ -447,11 +463,11 @@
                     style="color: var(--color-danger); font-size: 0.9rem; margin-bottom: 1rem; display: none;"></div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelChangePasswordBtn">
+                    <button type="button" class="btn btn-secondary" id="cancelChangePasswordBtn" data-i18n="cancel">
                         Cancel
                     </button>
                     <button type="submit" class="btn btn-primary" id="submitChangePasswordBtn">
-                        <span class="btn-text">Update Password</span>
+                        <span class="btn-text" data-i18n="update_password">Update Password</span>
                         <div class="btn-spinner"></div>
                     </button>
                 </div>
@@ -463,7 +479,7 @@
     <div class="modal-overlay" id="profileModal">
         <div class="modal">
             <div class="modal-header">
-                <h2 id="modalTitle">Create Profile</h2>
+                <h2 id="modalTitle" data-i18n="create_profile">Create Profile</h2>
                 <button class="modal-close" id="closeModal">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -501,27 +517,27 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="emailInput">Email Address</label>
+                    <label for="emailInput" data-i18n="email_address">Email Address</label>
                     <input type="email" id="emailInput" class="form-input" placeholder="Enter email address" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="roleInput">Role / Job Title</label>
-                    <input type="text" id="roleInput" class="form-input" placeholder="e.g. Software Engineer">
+                    <label for="roleInput" data-i18n="role_title">Role / Job Title</label>
+                    <input type="text" id="roleInput" class="form-input" data-i18n-placeholder="role_title" placeholder="e.g. Software Engineer">
                 </div>
 
                 <div class="form-group">
-                    <label for="bioInput">Bio</label>
-                    <textarea id="bioInput" class="form-input form-textarea" placeholder="Tell us about yourself..."
+                    <label for="bioInput" data-i18n="bio">Bio</label>
+                    <textarea id="bioInput" class="form-input form-textarea" data-i18n-placeholder="bio_hint" placeholder="Tell us about yourself..."
                         rows="4"></textarea>
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelBtn">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn" data-i18n="cancel">
                         Cancel
                     </button>
                     <button type="submit" class="btn btn-primary" id="submitBtn">
-                        <span class="btn-text">Create Profile</span>
+                        <span class="btn-text" data-i18n="create_btn">Create Profile</span>
                         <div class="btn-spinner"></div>
                     </button>
                 </div>
@@ -756,8 +772,8 @@
                         </svg>
                     </div>
                     <div>
-                        <h3>AI Assistant</h3>
-                        <span class="chat-status">Powered by Gemini</span>
+                        <h3 data-i18n="ai_assistant">AI Assistant</h3>
+                        <span class="chat-status" data-i18n="ai_status">Powered by Gemini</span>
                     </div>
                 </div>
             </div>
@@ -765,18 +781,18 @@
             <div class="chat-messages" id="chatMessages">
                 <div class="chat-message ai">
                     <div class="message-content">
-                        <p>Hi! I'm your AI assistant. I can help you manage technical blogs using natural language.</p>
-                        <p class="message-hint">Try saying things like:</p>
+                        <p data-i18n="ai_welcome">Hi! I'm your AI assistant. I can help you manage technical blogs using natural language.</p>
+                        <p class="message-hint" data-i18n="try_saying">Try saying things like:</p>
                         <ul class="message-examples">
-                            <li>"Search for blogs about React"</li>
-                            <li>"Show the latest blog post"</li>
+                            <li data-i18n="search_hint">"Search for blogs about React"</li>
+                            <li data-i18n="latest_hint">"Show the latest blog post"</li>
                         </ul>
                     </div>
                 </div>
             </div>
 
             <form class="chat-input-form" id="chatForm">
-                <input type="text" id="chatInput" class="chat-input" placeholder="Type your message..."
+                <input type="text" id="chatInput" class="chat-input" data-i18n-placeholder="chat_placeholder" placeholder="Type your message..."
                     autocomplete="off">
                 <button type="submit" class="chat-send" id="chatSend">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -794,7 +810,7 @@
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            <span>Home</span>
+            <span data-i18n="nav_home">Home</span>
         </button>
         <button class="bottom-nav-item" data-tab="network" id="bottomNetworkBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -803,7 +819,7 @@
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            <span>Network</span>
+            <span data-i18n="nav_network">Network</span>
         </button>
         <button class="bottom-nav-item" id="bottomNewPostBtn">
             <div class="plus-icon">
@@ -812,7 +828,7 @@
                     <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
             </div>
-            <span>Post</span>
+            <span data-i18n="nav_post">Post</span>
         </button>
         <button class="bottom-nav-item" id="bottomNotifBtn">
             <div style="position: relative;">
@@ -822,7 +838,7 @@
                 </svg>
                 <span id="notifBadgeBottom" class="notif-badge-small" style="display: none;">0</span>
             </div>
-            <span>Notif</span>
+            <span data-i18n="nav_notif">Notif</span>
         </button>
         <button class="bottom-nav-item" data-tab="my-profile" id="bottomProfileTab">
             <div class="nav-avatar" id="bottomProfileAvatar">
@@ -831,7 +847,7 @@
                     <circle cx="12" cy="7" r="4"></circle>
                 </svg>
             </div>
-            <span>Profile</span>
+            <span data-i18n="nav_profile">Profile</span>
         </button>
 
     </nav>

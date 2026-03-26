@@ -16,7 +16,7 @@ const API_URL = `${API_BASE_URL}/api/profiles`;
 
 // Image URL Helper
 function getImageUrl(url) {
-    if (!url) return '';
+    if (!url || typeof url !== 'string') return '';
     if (url.startsWith('http')) return url;
     if (url.startsWith('data:')) return url;
     if (url.startsWith('/api/') && typeof API_BASE_URL !== 'undefined') {
@@ -59,14 +59,61 @@ let blogs = []; // Store blogs globally for count
 let searchDebounceTimer = null;
 let currentUser = null; // Stores { token, user }
 let networkData = null; // Global cache for network info
+let currentLanguage = localStorage.getItem('appLanguage') || 'en';
+
+// Translation Logic
+function updateTranslations() {
+    const lang = currentLanguage;
+    const t = translations[lang] || translations['en'];
+
+    // Update text content for elements with data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key]) {
+            el.textContent = t[key];
+        }
+    });
+
+    // Update placeholders for elements with data-i18n-placeholder
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (t[key]) {
+            el.placeholder = t[key];
+        }
+    });
+
+    // Update titles for elements with data-i18n-title
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (t[key]) {
+            el.title = t[key];
+        }
+    });
+
+    // Set the language selector value
+    const langSelect = document.getElementById('languageSelect');
+    if (langSelect) {
+        langSelect.value = lang;
+    }
+}
+
+function setLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('appLanguage', lang);
+    updateTranslations();
+}
 
 // ========================================
 
 if (typeof marked !== 'undefined') {
     marked.use({
         renderer: {
-            image(href, title, text) {
-                return `<img src="${getImageUrl(href)}" alt="${text || ''}" title="${title || ''}">`;
+            image(token, title, text) {
+                // Support both (token) and (href, title, text) signatures
+                let href = typeof token === 'string' ? token : token.href;
+                let t = typeof token === 'string' ? title : token.title;
+                let txt = typeof token === 'string' ? text : token.text;
+                return `<img src="${getImageUrl(href)}" alt="${txt || ''}" title="${t || ''}">`;
             }
         }
     });
@@ -131,6 +178,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Register for push notifications after login (called from updateUIForRole too)
     initPushNotifications();
+
+    // Initialize Translations
+    updateTranslations();
+
+    // Language switcher listener
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+        languageSelect.addEventListener('change', (e) => {
+            setLanguage(e.target.value);
+        });
+    }
 });
 
 // ======================================================
@@ -2128,7 +2186,13 @@ async function showBlogDetail(id, pushState = true) {
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
                                 <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
                             </svg>
-                            Ask AI about this
+                            <span data-i18n="ai_explain">Explain with AI</span>
+                        </button>
+                        <button class="btn btn-secondary btn-sm ai-translate-btn" onclick="translateBlog('${blog._id}', this)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                                <path d="M5 8l6 6"></path><path d="M4 14l6-6 2-3"></path><path d="M2 5h12M7 2h1v3"></path><path d="M22 22l-5-10-5 10M14 18h6"></path>
+                            </svg>
+                            <span data-i18n="translate">Translate with AI</span>
                         </button>
                     </div>
 
@@ -2393,6 +2457,11 @@ function renderBlogs(blogs) {
                             <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                         </svg>
                         Share
+                    </button>
+                    <button class="interaction-btn ai-translate-btn" onclick="translateBlog('${blog._id}', this)" title="Translate with AI">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 8l6 6"></path><path d="M4 14l6-6 2-3"></path><path d="M2 5h12M7 2h1v3"></path><path d="M22 22l-5-10-5 10M14 18h6"></path>
+                        </svg>
                     </button>
                 </div>
 
@@ -2730,6 +2799,95 @@ async function showNetworkDetails(type) {
     }
 }
 
+function toggleCatchUpCollapse() {
+    const collapsible = document.getElementById('catchUpCollapsible');
+    const toggle = document.getElementById('catchUpToggle');
+    if (!collapsible || !toggle) return;
+
+    const isCollapsed = collapsible.style.maxHeight === '0px';
+    if (isCollapsed) {
+        collapsible.style.maxHeight = '2000px'; 
+        collapsible.style.opacity = '1';
+        toggle.querySelector('svg').style.transform = 'rotate(0deg)';
+    } else {
+        collapsible.style.maxHeight = '0px';
+        collapsible.style.opacity = '0';
+        toggle.querySelector('svg').style.transform = 'rotate(-90deg)';
+    }
+}
+
+async function fetchAndRenderUserPosts(userId, containerId, btnId) {
+    const container = document.getElementById(containerId);
+    const btn = document.getElementById(btnId);
+    if (!container) return;
+
+    // If already loaded and just toggling
+    if (container.dataset.loaded === 'true') {
+        const isCollapsed = container.style.maxHeight === '0px';
+        if (isCollapsed) {
+            container.style.maxHeight = '2000px';
+            container.style.opacity = '1';
+            if (btn) btn.innerHTML = btn.innerHTML.replace('Show', 'Hide');
+        } else {
+            container.style.maxHeight = '0px';
+            container.style.opacity = '0';
+            if (btn) btn.innerHTML = btn.innerHTML.replace('Hide', 'Show');
+        }
+        return;
+    }
+
+    // Initial load
+    container.innerHTML = '<div class="loading-state active" style="padding: 1rem;"><div class="spinner"></div></div>';
+    container.style.maxHeight = '1000px';
+    container.style.opacity = '1';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blogs/user/${userId}`);
+        
+        // Handle non-JSON or error responses
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error Response:', errorText.substring(0, 100));
+            throw new Error(`Server returned ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (!data.posts || data.posts.length === 0) {
+                container.innerHTML = '<p style="padding: 1rem; color: var(--color-text-muted); text-align: center;">No posts published yet.</p>';
+            } else {
+                container.innerHTML = data.posts.map(b => {
+                    const snippet = b.content ? b.content.replace(/<[^>]*>?/gm, '').substring(0, 100) + '...' : 'No content preview available.';
+                    return `
+                        <div onclick="showBlogDetail('${b._id}')" class="lazy-post-item" style="cursor: pointer; padding: 1.25rem; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); transition: all 0.2s ease; margin-bottom: 0.75rem;" onmouseover="this.style.borderColor='var(--color-accent-primary)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='var(--color-border)'; this.style.transform='translateY(0)';">
+                            <h5 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--color-text-primary); font-weight: 600;">${escapeHtml(b.title)}</h5>
+                            <p style="font-size: 0.875rem; color: var(--color-text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">${escapeHtml(snippet)}</p>
+                            <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--color-text-muted);">
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    ${new Date(b.createdAt).toLocaleDateString()}
+                                </span>
+                                <span>❤️ ${(b.likes || []).length}</span>
+                                <span>💬 ${(b.comments || []).length}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            container.dataset.loaded = 'true';
+            if (btn) btn.innerHTML = btn.innerHTML.replace('Show', 'Hide');
+        } else {
+            container.innerHTML = `<p style="padding: 1rem; color: var(--color-error);">${data.error || 'Failed to load posts'}</p>`;
+        }
+    } catch (error) {
+        console.error('Fetch posts error:', error);
+        container.innerHTML = `<p style="padding: 1rem; color: var(--color-error);">Error connecting to server. Details logged to console.</p>`;
+    }
+
+}
+
+
 async function loadMyProfile() {
     const content = document.getElementById('myProfileContent');
 
@@ -2841,33 +2999,23 @@ function renderMyProfile(profile) {
                     </button>
                 </div>
 
-                ${userBlogs.length > 0 ? `
                 <div style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem;">
-                    <h4 style="font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                        </svg>
-                        My Posts
-                    </h4>
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        ${userBlogs.map(b => `
-                            <div onclick="showBlogDetail('${b._id}')" style="cursor: pointer; padding: 1rem; background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: var(--radius-md); transition: all 0.2s ease;" onmouseover="this.style.borderColor='var(--color-accent-primary)'; this.style.transform='translateX(4px)';" onmouseout="this.style.borderColor='var(--color-border)'; this.style.transform='translateX(0)';">
-                                <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--color-text-primary);">${escapeHtml(b.title)}</h5>
-                                <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--color-text-muted);">
-                                    <span>${new Date(b.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                    <span>❤️ ${(b.likes || []).length}</span>
-                                    <span>💬 ${(b.comments || []).length}</span>
-                                </div>
-                            </div>
-                        `).join('')}
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                            My Posts
+                        </h4>
+                        <button class="btn btn-secondary btn-sm" id="toggleMyPostsBtn" onclick="fetchAndRenderUserPosts('${profile._id}', 'myPostsCollapsible', 'toggleMyPostsBtn')">
+                            Show Posts
+                        </button>
+                    </div>
+                    <div id="myPostsCollapsible" style="max-height: 0px; opacity: 0; overflow: hidden; transition: all 0.3s ease;">
+                        <!-- Lazy loaded content -->
                     </div>
                 </div>
-                ` : `
-                <div style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem; text-align: center; color: var(--color-text-muted);">
-                    <p>You haven't published any posts yet. Start sharing your insights!</p>
-                </div>
-                `}
             </div>
         </div>
     `;
@@ -3117,18 +3265,21 @@ function renderProfileDetail(profile) {
                     </div>
                 </div>
 
-                <div style="margin-top: 2rem;">
-                    <h4>Recent Posts</h4>
-                    <div class="user-posts-list">
-                        ${userBlogs.length > 0 
-                            ? userBlogs.slice(0, 5).map(b => `
-                                <div class="post-preview-item" onclick="showBlogDetail('${b._id}')" style="cursor: pointer; padding: 1rem; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 0.75rem; transition: background 0.2s;">
-                                    <h5 style="margin: 0 0 0.25rem 0;">${escapeHtml(b.title)}</h5>
-                                    <span style="font-size: 0.8rem; color: var(--color-text-muted);">${new Date(b.createdAt).toLocaleDateString()}</span>
-                                </div>
-                            `).join('')
-                            : '<p style="color: var(--color-text-muted);">This user hasn\'t posted anything yet.</p>'
-                        }
+                <div style="margin-top: 2rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                            Recent Posts
+                        </h4>
+                        <button class="btn btn-secondary btn-sm" id="toggleUserPostsBtn" onclick="fetchAndRenderUserPosts('${profile._id}', 'userPostsCollapsible', 'toggleUserPostsBtn')">
+                            Show Posts
+                        </button>
+                    </div>
+                    <div id="userPostsCollapsible" style="max-height: 0px; opacity: 0; overflow: hidden; transition: all 0.3s ease;">
+                        <!-- Lazy loaded content -->
                     </div>
                 </div>
             </div>
@@ -3138,6 +3289,7 @@ function renderProfileDetail(profile) {
     // Smooth scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
 
 function createProfileCard(profile) {
     const initials = getInitials(profile.name);
@@ -4212,3 +4364,43 @@ document.addEventListener('DOMContentLoaded', () => {
         richEditor.addEventListener('drop', () => setTimeout(validateBlogForm, 50));
     }
 });
+
+async function translateBlog(id, btn) {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="width: 1rem; height: 1rem; border-width: 0.15em;"></span>`;
+    btn.disabled = true;
+
+    try {
+        const lang = (typeof currentLanguage !== 'undefined') ? currentLanguage : (localStorage.getItem('appLanguage') || 'en');
+        const response = await fetch(`${API_BASE_URL}/api/blogs/${id}/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetLanguage: lang })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Find the blog card or container
+            const container = document.getElementById(`blog-${id}`) || document.querySelector('.blog-detail-container');
+            if (container) {
+                const titleEl = container.querySelector('h1') || container.querySelector('h2');
+                const contentEl = container.querySelector('.blog-content');
+                if (titleEl) titleEl.innerText = data.translatedTitle;
+                if (contentEl) {
+                    contentEl.innerHTML = typeof marked !== 'undefined' 
+                        ? marked.parse(data.translatedContent) 
+                        : data.translatedContent;
+                }
+                showToast('Blog translated successfully!', 'success');
+            }
+        } else {
+            showToast(data.error || 'Translation failed', 'error');
+        }
+    } catch (error) {
+        console.error('Translation error:', error);
+        showToast('Connection error during translation', 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
