@@ -3307,7 +3307,8 @@ body.is-native-app {
 
     /* Hide redundant header elements on mobile since they are now in the bottom nav */
     #notificationBellWrap,
-    #userProfileTab {
+    #userProfileTab,
+    #networkTab {
         display: none !important;
     }
     
