@@ -149,8 +149,7 @@ if (process.env.GEMINI_API_KEY) {
     try {
         lcGemini = new ChatGoogleGenerativeAI({
             apiKey: process.env.GEMINI_API_KEY,
-            modelName: "gemini-1.5-flash", 
-            apiVersion: "v1",
+            model: "gemini-1.5-flash", 
         });
         console.log('LangChain Gemini initialized');
     } catch (e) {
