@@ -115,25 +115,21 @@ if (GEMINI_API_KEY) {
 }
 
 // ----------------------------------------
-// Embedding Setup (LangChain)
+// Embedding Setup (Google Generative AI)
 // ----------------------------------------
-let lcEmbeddings = null;
-if (process.env.GEMINI_API_KEY) {
-    lcEmbeddings = new GoogleGenerativeAIEmbeddings({
-        apiKey: process.env.GEMINI_API_KEY,
-        modelName: "embedding-001", // LangChain expects the model without 'models/'
-    });
-    console.log('LangChain Embeddings initialized');
-}
+// (Already initialized above)
 
-// Generate embedding helper for RAG (LangChain)
+// Generate embedding helper for RAG (Google Generative AI)
 async function generateEmbedding(text) {
-    if (!lcEmbeddings) return null;
+    if (!embeddingModel) return null;
     try {
-        const safeText = text.substring(0, 10000);
-        return await lcEmbeddings.embedQuery(safeText);
+        const safeText = text.substring(0, 9900);
+        const result = await embeddingModel.embedContent(safeText);
+        // MongoDB vector search index is configured to 768 dims in the Atlas UI
+        // gemini-embedding-001 outputs 3072 dims by default, so we slice the first 768 dims.
+        return result.embedding.values.slice(0, 768);
     } catch (e) {
-        console.error('LangChain Embedding error:', e.message);
+        console.error('Google Generative AI Embedding error:', e.message);
         return null;
     }
 }
