@@ -10,7 +10,6 @@ env:
   SERVICE_NAME: profile-ui
   REGION: us-central1
   IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/profile-ui
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
@@ -20,17 +19,17 @@ jobs:
     steps:
       # 1. Check out the code
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 2. Authenticate to Google Cloud
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       # 3. Set up Google Cloud SDK
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       # 4. Configure Docker to use GCR
       - name: Configure Docker for GCR
