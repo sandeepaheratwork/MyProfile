@@ -1688,9 +1688,12 @@ body.is-native-app {
     transition: bottom 0.3s ease;
 }
 
-/* Lift chat widget when bottom nav is active */
-body.is-native-app .chat-widget {
-    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+/* Lift chat widget when bottom nav is active (both native and mobile browser) */
+@media (max-width: 768px) {
+    .chat-widget {
+        bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 2100; /* Must be above bottom nav (2000) */
+    }
 }
 
 /* Chat Toggle Button */
@@ -3300,6 +3303,18 @@ body.is-native-app .chat-widget {
     
     body.is-logged-in {
         padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Hide redundant header elements on mobile since they are now in the bottom nav */
+    #notificationBellWrap,
+    #userProfileTab {
+        display: none !important;
+    }
+    
+    /* Ensure chat widget is visible above mobile bottom nav */
+    .chat-widget {
+        bottom: calc(85px + env(safe-area-inset-bottom, 0px));
+        z-index: 2001;
     }
 }
 

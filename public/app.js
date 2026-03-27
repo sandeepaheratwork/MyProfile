@@ -182,6 +182,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Translations
     updateTranslations();
 
+    // Initialize AI Chat
+    initChat();
+
     // Language switcher listener
     const languageSelect = document.getElementById('languageSelect');
     if (languageSelect) {
