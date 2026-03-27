@@ -10,6 +10,7 @@ env:
   SERVICE_NAME: profile-ui
   REGION: us-central1
   IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/profile-ui
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
